@@ -1,0 +1,71 @@
+image: multiarch_compiler:focal
+
+variables:
+    FW_MAJOR_VERSION: 1
+    FW_MINOR_VERSION: 18
+    FW_BUILD_VERSION: $CI_PIPELINE_ID
+    ARCH32: armhf
+    ARCH64: arm64
+    ARCHX86: amd64
+
+stages:
+  - syntax_check
+  - dbpack
+
+syntax_check:
+  stage: syntax_check
+  image: python:3.8
+  script:
+    - pip install flake8
+    - flake8 --statistics --count --extend-ignore=E501 *.py
+  allow_failure: true
+
+
+.dbpacking_script:
+  script:
+    - mkdir build
+    - cd build
+    - cmake .. -DCPACK_DEBIAN_PACKAGE_ARCHITECTURE=$CPACK_DEBIAN_PACKAGE_ARCHITECTURE -DFW_MAJOR_VERSION=$FW_MAJOR_VERSION -DFW_MINOR_VERSION=$FW_MINOR_VERSION -DFW_BUILD_VERSION=$FW_BUILD_VERSION
+    - cpack .
+
+.dbpacking:
+  extends: .dbpacking_script
+  artifacts:
+    paths:
+      - build/*.deb
+
+include:
+  - project: 'uspd-linux/sw/uspd-meta'
+    ref: master
+    file: '.gitlab-ci/.dpackbuilding-stages.yml'
+
+----
+variables:
+  # Device under test settings:
+  DEVICE_IP_UM40: 192.168.202.170
+  DEVICE_LOGIN_UM40: admin
+  DEVICE_PASSWORD_UM40: admin
+
+  # Slack integration settings (see auth token in secrets):
+  AUTOTESTS_CHANNEL_ID: C02SH6S9NAV
+
+
+stages:
+  - prepare
+  - run tests
+
+
+Build container:
+  stage: prepare
+  image: docker:git
+  script:
+    - docker build -t umxx-smart-pytest .
+
+UM40 Full:
+  stage: run tests
+  image: umxx-smart-pytest
+  script:
+    - python -m pytest -vv --IP_address_UM40 $DEVICE_IP_UM40 --login_UM40 $DEVICE_LOGIN_UM40 --password_UM40 $DEVICE_PASSWORD_UM40 --name_test UM40 --html=report.html --self-contained-html || exit_code=$?
+    - ./send_slack_message.sh
+  when: manual
+  allow_failure: false
