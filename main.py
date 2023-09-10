@@ -16,6 +16,26 @@
 # - Сервис должен быть запакован в Dockerfile
 
 
-
-
+#
+# import pika
+#
+# # Устанавливаем параметры соедененния
+# rmq_url_connection_str = "localhost:4369"
+# rmq_parameters = pika.URLParameters(rmq_url_connection_str)
+# # Создаем соединение
+# rmq_connection = pika.BlockingConnection(rmq_parameters)
+# # Создаем канал
+# rmq_channel = rmq_connection.channel()
+#
+# # --->
+# # Делаем нашу публикацию в нужном топике
+# exchange = "Cadastral"
+# routing = "request"
+# text = "{\"GOVNO\":1}"
+#
+#
+# # exchange - Топик
+# # routing_key - Маршрут
+# # body - Само наше сообщение
+# rmq_channel.basic_publish(exchange = exchange, routing_key = routing, body = text)
 

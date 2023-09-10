@@ -183,133 +183,227 @@ from sqlalchemy.orm import sessionmaker
 #
 #         return self.result, response
 
-    # -------
+# -------
 
-    # ----------------------------SQLALCHEMY--------------------------------
-    # Подключение к базе данных через SQLAlchemy
-    # движок
-    from sqlalchemy import create_engine
-    # Сессия к БД
-    from sqlalchemy.orm import sessionmaker
+# ----------------------------SQLALCHEMY--------------------------------
+# Подключение к базе данных через SQLAlchemy
+# движок
+from sqlalchemy import create_engine
+# Сессия к БД
+from sqlalchemy.orm import sessionmaker
 
-    # -------------------------------- Создание сессии --------------------------------
+# -------------------------------- Создание сессии --------------------------------
+# Создаем сессию с БД:
+# Файл БД
+_folder_path = "C:\\Users\\TRIGUN-D\\PycharmProjects\\DOM.RF\\"
+# _folder_path = "\\"
+_data_base_path = "database.db"
+# Путь до нее
+# ---------------------- Обработчик ошибки -------------------
+# Создаем наш путь до БД
+# ШАБЛОН - sqlite://username:password@host:port/database
+sqlite_filepath = f"sqlite:///{_folder_path + _data_base_path}"
 
-    # Создаем сессию с БД:
-    # Файл БД
-    _data_base_path = "database.db"
-    # Путь до нее
-    # ---------------------- Обработчик ошибки -------------------
-    # Создаем наш путь до БД
-    # ШАБЛОН - sqlite://username:password@host:port/database
-    sqlite_filepath = f"sqlite:///{_data_base_path}"
+# ----------------------------------------------------------------------------------
 
-    # Создаем драйвер движок
-    # Наши настройки
-    # echo - Логирование
-    # pool_size - Количество одновременных коннектов
-    # encoding - Кодировка БД
-    # isolation_level - Уровень изоляции
+# Создаем драйвер движок
+# Наши настройки
+# echo - Логирование
+# pool_size - Количество одновременных коннектов
+# encoding - Кодировка БД
+# isolation_level - Уровень изоляции
 
-    engine = create_engine(sqlite_filepath, echo=False, pool_size=1)
-    # Подключаемся к БД
-    engine.connect()
+engine = create_engine(sqlite_filepath, echo=False, pool_size=1)
+# Подключаемся к БД
+engine.connect()
 
-    print(engine)
-    # -------------------------------- Создание Схемы данных --------------------------------
-    from sqlalchemy import MetaData, Table, String, Integer, Column, Text, DateTime, Boolean
-    from datetime import datetime
+print(engine, type(engine))
 
-    # Декларируем таблицу
-    from sqlalchemy.ext.declarative import declarative_base
+# -------------------------------- Создание Схемы данных --------------------------------
+from sqlalchemy import MetaData, Table, String, Integer, Column, Text, DateTime, Boolean, PrimaryKeyConstraint, \
+    UniqueConstraint, ForeignKeyConstraint, ForeignKey
+from datetime import datetime
 
-    # # создаем класс, от которого будут наследоваться модели
-    DeclarativeAuthBase = declarative_base()
+# Декларируем таблицу
+# from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base, relationship
 
-    class AddressData(DeclarativeAuthBase):
-        # Имя таблицы
-        __tablename__ = "AddressData"
-        # Поля Таблицы
-        Id = Column("ID", Integer, primary_key=True)
-        CoordinatesImmovablesID = Column("CoordinatesImmovablesID", Integer)
-        CadastralID = Column("CadastralID", Integer)
-        CalculatedID = Column("CalculatedID", Integer)
-
-        def __init__(self, Id, CoordinatesImmovablesID, CadastralID, CalculatedID):
-            self.Id = Id
-            self.CoordinatesImmovablesID = CoordinatesImmovablesID
-            self.CadastralID = CadastralID
-            self.CalculatedID = CalculatedID
-
-        # def __repr__(self):
-        #     return "".format(self.code)
+# создаем класс, от которого будут наследоваться модели
+DeclarativeBase = declarative_base()
 
 
-    class Calculated(DeclarativeAuthBase):
-        # Имя таблицы
-        __tablename__ = "Calculated"
-        # Поля Таблицы
-        Id = Column("ID", Integer, primary_key=True)
-        Calculated = Column("Calculated", String)
+class AddressData(DeclarativeBase):
+    # Имя таблицы
+    __tablename__ = "AddressData"
+    # Поля Таблицы
+    # Id Записи
+    Id = Column("ID", Integer, primary_key=True, index=True)
+    # Id Записи Координат
+    CoordinatesImmovablesID = Column("CoordinatesImmovablesID", Integer, ForeignKey("CoordinatesImmovables.ID"))
+    # Id Записи кадастрового номера
+    CadastralID = Column("CadastralID", Integer, ForeignKey("Cadastral.ID"))
+    # Id Записи вычислений
+    CalculatedID = Column("CalculatedID", Integer, ForeignKey("Calculated.ID"))
+    # ////////
+    # Проводим связь между другими таблицами:
+    # Вычисление
+    Calculated = relationship("CalculatedTable", back_populates="AddressData")
+    # Координаты объекта
+    CoordinateImmovable = relationship("CoordinatesImmovablesTable", back_populates="AddressData_CoordinateImmovable")
+    # Кадастровый номер объекта
+    Cadastral = relationship("CadastralTable", back_populates="AddressData_Cadastral")
 
-        def __init__(self, Id, Calculated):
-            self.Id = Id
-            self.Calculated = Calculated
-
-        # def __repr__(self):
-        #     return "".format(self.code)
-
-    class CoordinatesImmovables(DeclarativeAuthBase):
-        # Имя таблицы
-        __tablename__ = "CoordinatesImmovables"
-        # Поля Таблицы
-        Id = Column("ID", Integer, primary_key=True)
-        CoordinatX = Column("CoordinatX", )
-        CoordinatY = Column("CoordinatY", String)
-
-        def __init__(self, Id, CoordinatX ,CoordinatY ):
-            self.Id = Id
-            self.CoordinatX = CoordinatX
-            self.CoordinatY = CoordinatY
+    def __init__(self, Id, CoordinatesImmovablesID, CadastralID, CalculatedID):
+        self.Id = Id
+        self.CoordinatesImmovablesID = CoordinatesImmovablesID
+        self.CadastralID = CadastralID
+        self.CalculatedID = CalculatedID
 
 
-    class Cadastral(DeclarativeAuthBase):
-        # Имя таблицы
-        __tablename__ = "Cadastral"
-        # Поля Таблицы
-        Id = Column("ID", Integer, primary_key=True)
-        AA = Column("AA", Integer)
-        BB = Column("BB", Integer)
-        CCCCCCC = Column("CCCCCCC",Integer)
-        KK = Column("КК", String)
+class CalculatedTable(DeclarativeBase):
+    # Имя таблицы
+    __tablename__ = "Calculated"
+    # Поля Таблицы
+    # Id Записи вычислений
+    Id = Column("ID", Integer, primary_key=True)
+    # Запись вычислений
+    Calculate = Column("Calculate", String)
+    # ////////
+    # Проводим связь между другими таблицами:
+    AddressData = relationship("AddressData", back_populates="Calculated")
 
-        def __init__(self, Id, AA ,BB, CCCCCCC ,KK ):
-            self.Id = Id
-            self.AA = AA
-            self.BB = BB
-            self.CCCCCCC = CCCCCCC
-            self.KK = KK
-    # -----------------------------------------------------------------------------------------
+    def __init__(self, Id, Calculate):
+        self.Id = Id
+        self.Calculate = Calculate
+
+    # def __repr__(self):
+    #     return "".format(self.code)
+
+
+class CoordinatesImmovablesTable(DeclarativeBase):
+    # Имя таблицы
+    __tablename__ = "CoordinatesImmovables"
+    # Поля Таблицы
+    # Id Записи Координат
+    Id = Column("ID", Integer, primary_key=True)
+    # Запись Координат X
+    CoordinatX = Column("CoordinatX", String)
+    # Запись Координат Y
+    CoordinatY = Column("CoordinatY", String)
+
+    # ////////
+    # Проводим связь между другими таблицами:
+    AddressData_CoordinateImmovable = relationship("AddressData", back_populates="CoordinateImmovable")
+
+    def __init__(self, Id, CoordinatX, CoordinatY):
+        self.Id = Id
+        self.CoordinatX = CoordinatX
+        self.CoordinatY = CoordinatY
+
+
+class CadastralTable(DeclarativeBase):
+    # Имя таблицы
+    __tablename__ = "Cadastral"
+    # Поля Таблицы
+    # Id Записи кадастрового номера
+    Id = Column("ID", Integer, primary_key=True)
+    # Запись кадастрового номера - AA
+    AA = Column("AA", Integer)
+    # Запись кадастрового номера - BB
+    BB = Column("BB", Integer)
+    # Запись кадастрового номера - CCCCCCC
+    CCCCCCC = Column("CCCCCCC", Integer)
+    # Запись кадастрового номера - КК
+    KK = Column("КК", String)
+    # ////////
+    # Проводим связь между другими таблицами:
+    AddressData_Cadastral = relationship("AddressData", back_populates="Cadastral")
+
+    def __init__(self, Id, AA, BB, CCCCCCC, KK):
+        self.Id = Id
+        self.AA = AA
+        self.BB = BB
+        self.CCCCCCC = CCCCCCC
+        self.KK = KK
+
     # Создаем сессию
 
     # autoflush - Разрешение авто сохранения
 
-    # Создаем сессию
-    SessionLocal = sessionmaker(bind=engine, autoflush=False)
-    session = SessionLocal()
 
-    # session_db.connection()
+# Создаем сессию
+SessionLocal = sessionmaker(bind=engine, autoflush=False)
 
-    # lol = HTTPAuth()
-    # s = session_db.get()
-    # print(s)
+print("SessionLocal", SessionLocal)
+# session = SessionLocal(autoflush=False, bind=engine)
 
-    # lol = session.get(HTTPAuth)
-    #
-    # print(lol)
+with SessionLocal(autoflush=False, bind=engine) as db:
+    a = db.query(AddressData).all()
 
-    results = session.query(HTTPAuth).all()
+    print("Резултат", a)
+    for i in a:
+        print(i.Calculated.Id)
 
-    for i in results:
-        print(i.Login)
+class DataBase:
+    """
+    Класс для работы с БД
+    """
+
+    # Создаем сессию с БД:
+    # Файл БД
+    _data_base_path = "database.db"
+
+    # Движок базы данных
+
+    # Сессия БД
+
+    def __init__(self):
+        # ----------------------------SQLALCHEMY--------------------------------
+        # Подключение к базе данных через SQLAlchemy
+        # движок
+        from sqlalchemy import create_engine
+        # Сессия к БД
+        from sqlalchemy.orm import sessionmaker
+
+    def _create_engine(self):
+        """
+        Создаем наш движок
+        :return:
+        """
+
+    def _create_session(self):
+        """
+        Создаем нашу сессию обмена
+        :return:
+        """
+
+    def SELECT(self):
+        """
+
+        :return:
+        """
+        pass
+
+    def UPDATE(self):
+        """
+
+        :return:
+        """
+        pass
+
+    def INSERT(self):
+        """
+
+        :return:
+        """
+        pass
+
+    def DELETE(self):
+        """
+
+        :return:
+        """
+        pass
+
 
 
