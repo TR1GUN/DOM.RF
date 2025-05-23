@@ -1,4 +1,8 @@
-flask
+sqlalchemy[asyncio]==2.0.27
 fastapi
 celery
-redis
+redis==6.1.0
+redis-om==0.3.2
+pydantic
+pika
+pika-stubs
