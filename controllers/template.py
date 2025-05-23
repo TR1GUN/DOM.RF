@@ -1,0 +1,3 @@
+
+class TemplateController:
+    pass
