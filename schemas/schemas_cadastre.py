@@ -36,7 +36,9 @@ class PositionInQueue(pydantic.BaseModel):
 
     """
     position: int
+    len_queue: int
     key:str
+
 
 
 class QueueCadastre(pydantic.BaseModel):
