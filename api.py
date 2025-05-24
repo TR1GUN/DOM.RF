@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from endpoints import cadastre as cadastre_api
+from web.endpoints import cadastre as cadastre_api
 from celery_tasks.celery.celery_app import create_celery
 # app = FastAPI()
 # app.include_router(cadastre_api)
