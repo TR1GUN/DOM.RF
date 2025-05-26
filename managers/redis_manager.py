@@ -4,6 +4,20 @@ from controllers import RedisController
 from config import Settings
 
 
+# Задачи Менеджера:
+
+# Добавить новую запись в очередь +
+# Получение записи +
+# Редактирование записи +
+# Удалить запись в очереди +
+
+# Получение информации об очереди +
+# Получение информации о записи в очереди +
+
+# Получение первой записи в очереди +
+# Переместить запись в очереди +
+
+
 class RedisManager:
     """
     Redis Manager
@@ -38,6 +52,23 @@ class RedisManager:
         """
         return RecordCadastre.model_validate(self._controller.get_json_record(pk=key))
 
+    def edit_record(self, key:str, record:RecordCadastre)->None:
+        """
+        Изменение записи кадастра которая должна будет отправлена на расчет
+        :param key:
+        :param record:
+        :return:
+        """
+        self._controller.edit_record(key=key, record=record)
+
+    def delete_record(self, key:str):
+        """
+        Удаление записи
+        :param key:
+        :return:
+        """
+        self._controller.delete_record(key=key)
+
     def get_queue(self) -> QueueCadastre:
         """
         Получение всей очереди
@@ -45,9 +76,9 @@ class RedisManager:
         """
         return QueueCadastre.model_validate(self._controller.get_queue_topic(topic=self._topic))
 
-    def get_queue_(self, key):
+    def get_position_in_queue(self, key:str):
         """
-        Получение своего места в очереди
+        Получение информации о своем положении в очереди
         :return:
         """
         # Вся очередь
@@ -55,6 +86,17 @@ class RedisManager:
         # твое место в очереди
         position_in_queue = self._controller.find_index_element_in_queue_topic(topic=self._topic, key=key)
         return PositionInQueue(position=position_in_queue, key=key, len_queue=len_queue)
+
+    def get_first_record_in_queue(self):
+        """
+        Получение первой записи в очереди
+        :return:
+        """
+        # получение первой записи в очереди
+        # Получение записи по ключу
+        # удаление записи из очереди ?
+        value = self._controller.get_queue_topic()
+        return value
 
     def move_record_in_queue(self, new_position:int, key:str):
         """
@@ -70,9 +112,11 @@ class RedisManager:
         Формирование уникального первичного ключа для новой записи
         :return:
         """
+        # Получение максимального индекса из списка
         # index = self._controller.get_new_new_index_by_topic(topic=self._topic)
         len_topic = self._controller.get_len_queue_topic(topic=self._topic)
         # data = int(datetime.datetime.now().timestamp())
+        # Добавление
         return f'{self._topic}-{len_topic + 1}'
 
 
