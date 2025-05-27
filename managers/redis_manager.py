@@ -1,4 +1,3 @@
-
 from schemas.schemas_cadastre import RecordCadastre, CadastreNumber, CoordinateObject, PositionInQueue, QueueCadastre
 from controllers import RedisController
 from config import Settings
@@ -52,42 +51,54 @@ class RedisManager:
         """
         return RecordCadastre.model_validate(self._controller.get_json_record(pk=key))
 
-    def edit_record(self, key:str, record:RecordCadastre)->None:
+    def edit_record(self, key: str, record: RecordCadastre) -> None:
         """
         Изменение записи кадастра которая должна будет отправлена на расчет
         :param key:
         :param record:
         :return:
         """
-        self._controller.edit_record(key=key, record=record)
+        self._controller.edit_json_record(pk=key, record=record)
+        # или так -
+        # self._controller.delete_json_record(pk=key)
+        # self._controller.add_json_record(pk=key, record=record)
 
-    def delete_record(self, key:str):
+    def delete_record(self, key: str):
         """
         Удаление записи
         :param key:
         :return:
         """
-        self._controller.delete_record(key=key)
+        self._controller.delete_json_record(pk=key)
 
     def get_queue(self) -> QueueCadastre:
         """
         Получение всей очереди
         :return:
         """
-        return QueueCadastre.model_validate(self._controller.get_queue_topic(topic=self._topic))
+        return QueueCadastre.model_validate(self._controller.get_elements_in_in_queue_topic(topic=self._topic))
 
-    def get_position_in_queue(self, key:str):
+    def get_position_in_queue(self, key: str):
         """
         Получение информации о своем положении в очереди
         :return:
         """
         # Вся очередь
-        len_queue = len(self._controller.get_queue_topic(topic=self._topic))
+        len_queue = len(self._controller.get_elements_in_in_queue_topic(topic=self._topic))
         # твое место в очереди
         position_in_queue = self._controller.find_index_element_in_queue_topic(topic=self._topic, key=key)
         return PositionInQueue(position=position_in_queue, key=key, len_queue=len_queue)
 
-    def get_first_record_in_queue(self):
+    def move_record_in_queue(self, new_position: int, key: str):
+        """
+        Изменить твое место в очереди
+        :param new_position:
+        :return:
+        """
+        # Изменение номера записи в очереди
+        self._controller.move_element(topic=self._topic, new_index=new_position, value=key)
+
+    def get_first_record_in_queue(self) -> RecordCadastre:
         """
         Получение первой записи в очереди
         :return:
@@ -95,17 +106,16 @@ class RedisManager:
         # получение первой записи в очереди
         # Получение записи по ключу
         # удаление записи из очереди ?
-        value = self._controller.get_queue_topic()
+        value = self._controller.first_record_in_queue()
         return value
 
-    def move_record_in_queue(self, new_position:int, key:str):
+    # сбросить очередь
+    def reset_queue_count(self):
         """
-        Изменить твое место в очереди
-        :param new_position:
+        Сброс отсчета очереди
         :return:
         """
-        # Изменение номера записи в очереди
-        self._controller.move_element(topic=self._topic, new_index=new_position,value=key)
+        self._controller.reset_index_queue(topic=self._topic)
 
     def _formation_of_new_primary_key(self) -> str:
         """
