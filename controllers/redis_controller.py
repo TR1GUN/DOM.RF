@@ -174,7 +174,7 @@ class RedisController(BaseController):
             # # Вставляем нужные значения
             # self._redis_client.lpush(name=topic, *new_queue)
 
-    def first_record_in_queue(self, topic) -> RecordCadastre:
+    def first_record_in_queue(self, topic:str) -> RecordCadastre:
         """
         Получаем первую очередь в очереди
         :return:

@@ -98,7 +98,7 @@ class RedisManager:
         # Изменение номера записи в очереди
         self._controller.move_element(topic=self._topic, new_index=new_position, value=key)
 
-    def get_first_record_in_queue(self) -> RecordCadastre:
+    def get_first_record_in_queue(self) -> RecordCadastre|None:
         """
         Получение первой записи в очереди
         :return:
@@ -106,7 +106,7 @@ class RedisManager:
         # получение первой записи в очереди
         # Получение записи по ключу
         # удаление записи из очереди ?
-        value = self._controller.first_record_in_queue()
+        value = self._controller.first_record_in_queue(topic=self._topic)
         return value
 
     # сбросить очередь
