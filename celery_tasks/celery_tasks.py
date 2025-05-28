@@ -1,7 +1,7 @@
 from celery import shared_task
-
 from api_client import BillingApi
 from api_client.schemas import AnswerBillingCadastre
+from schemas.schemas_cadastre import RecordCadastre
 from config import Settings
 
 
@@ -10,6 +10,6 @@ from config import Settings
              retry_backoff=True,
              retry_kwargs={'max_retries': 5},
              name='cadastre:billing_request')
-def billing_request(record: dict) -> AnswerBillingCadastre:
+def billing_request(record: RecordCadastre) -> AnswerBillingCadastre:
     api = BillingApi(url=Settings.api.billing_cadastre_url)
     return api.calculate_cadastre(record=record)
