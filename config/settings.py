@@ -5,7 +5,7 @@ class RabbitMQSettings(BaseModel):
     """
     Rabbit MQ settings
     """
-    url: str = 'localhost'
+    host: str = 'localhost'
     port: int = 5672
     login: str = 'guest'
     password:str = 'guest'
