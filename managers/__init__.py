@@ -1,5 +1,7 @@
 __init__ = [
-    'RedisManager'
+    'RedisManager',
+    'RabbitException',
 ]
 
 from .redis_manager import RedisManager
+from controllers.errors import RabbitException
