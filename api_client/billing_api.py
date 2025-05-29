@@ -16,7 +16,7 @@ class BillingApi:
         Отправка на расчет в биллинг
         :return:
         """
-        print(f'request to {self._url}')
+        print(f'request to {self._url}', record)
         time.sleep(random.randint(10, 60))
         answer = {'calculated': True}
 
