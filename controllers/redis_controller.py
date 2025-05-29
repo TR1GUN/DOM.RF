@@ -11,8 +11,8 @@ class RedisController(BaseController):
     """
     Redis Controller
     """
-    _host: str
-    _port: int
+    # _host: str
+    # _port: int
     _db: int
 
     _redis_client: redis.Redis | None = None
