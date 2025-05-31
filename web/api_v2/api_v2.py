@@ -8,8 +8,8 @@ from database.queries.records_cadastres import add_record_cadastre, get_cadastre
 from database.setup_db import DataBase
 
 
-cadastre = APIRouter(
-    prefix='/cadastre',
+v2 = APIRouter(
+    prefix='/v2',
     tags=['Cadastre'],
     responses={404: {"description": "Not found"}},
 )
