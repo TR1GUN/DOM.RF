@@ -22,18 +22,23 @@ class CoordinateObject(pydantic.BaseModel):
 class RecordCadastre(pydantic.BaseModel):
     """
     Record cadastre
-
-    # -Кадастровый номер
-    # -Координата х
-    # -Координата у
     """
     cadastre_number: CadastreNumber = pydantic.Field()
     coordinates: CoordinateObject = pydantic.Field()
 
 
+class RecordCadastreInRedis(pydantic.BaseModel):
+    """
+    Record cadastre in redis
+    """
+    cadastre_number: CadastreNumber = pydantic.Field()
+    coordinates: CoordinateObject = pydantic.Field()
+    calculated: bool
+
+
 class PositionInQueue(pydantic.BaseModel):
     """
-
+    Position in queue schema
     """
     position: int
     len_queue: int
@@ -46,3 +51,11 @@ class QueueCadastre(pydantic.BaseModel):
 
     """
     queue: list[str] = pydantic.Field()
+
+class RecordInfo(pydantic.BaseModel):
+    """
+    Record info
+    """
+    index: int
+    position_in_queue:PositionInQueue| None = pydantic.Field(default=None)
+
