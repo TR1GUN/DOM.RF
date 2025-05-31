@@ -29,15 +29,15 @@ class RedisController(BaseController):
         session.save()
         session.close()
 
-    def add_json_record(self, pk: str, record: RecordCadastre) -> None:
+    def add_json_record(self, pk: str, record: dict[str, typing.Any]) -> None:
         """
-        Добавляем JSON запись в хранилище
+        Added json(dict) record in Storage
         :param pk:
         :param record:
         :return:
         """
         with self._session_redis() as self._redis_client:
-            self._redis_client.json().set(pk, ".", record.model_dump())
+            self._redis_client.json().set(pk, ".", record)
 
     def get_json_record(self, pk: str) -> dict[str:typing.Any]:
         """

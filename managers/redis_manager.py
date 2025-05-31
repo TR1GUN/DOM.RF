@@ -1,4 +1,4 @@
-from schemas.schemas_cadastre import RecordCadastre, CadastreNumber, CoordinateObject, PositionInQueue, QueueCadastre
+from schemas.schemas_cadastre import RecordCadastre, CadastreNumber, CoordinateObject, PositionInQueue, QueueCadastre, RecordCadastreInRedis
 from controllers import RedisController
 from config import Settings
 
@@ -32,18 +32,18 @@ class RedisManager:
         )
         self._topic = topic
 
-    def add_record(self, record: RecordCadastre) -> PositionInQueue:
+    def add_record(self, record: RecordCadastreInRedis) -> PositionInQueue:
         """
         Добавление новой записи на расчет
         :param record:
         :return: Номерок, что выдают и Место в очереди
         """
         key = self._formation_of_new_primary_key()
-        self._controller.add_json_record(pk=key, record=record)
+        self._controller.add_json_record(pk=key, record=record.model_dump())
         position_in_queue = self._controller.add_element_in_queue_topic(topic=self._topic, value=key)
         return PositionInQueue(position=position_in_queue, key=key, len_queue=position_in_queue)
 
-    def get_record(self, key: str) -> RecordCadastre:
+    def get_record(self, key: str) -> RecordCadastreInRedis:
         """
         Получение записи по его значению.
         :param key:
