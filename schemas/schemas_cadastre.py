@@ -1,5 +1,7 @@
 import pydantic
 
+from enums import Stage
+
 
 class CadastreNumber(pydantic.BaseModel):
     """
@@ -34,6 +36,7 @@ class RecordCadastreInRedis(pydantic.BaseModel):
     cadastre_number: CadastreNumber = pydantic.Field()
     coordinates: CoordinateObject = pydantic.Field()
     calculated: bool
+    index: str
 
 
 class PositionInQueue(pydantic.BaseModel):
@@ -42,8 +45,7 @@ class PositionInQueue(pydantic.BaseModel):
     """
     position: int
     len_queue: int
-    key:str
-
+    key: str
 
 
 class QueueCadastre(pydantic.BaseModel):
@@ -52,10 +54,29 @@ class QueueCadastre(pydantic.BaseModel):
     """
     queue: list[str] = pydantic.Field()
 
-class RecordInfo(pydantic.BaseModel):
+
+class RecordInfoRedis(pydantic.BaseModel):
     """
     Record info
     """
-    index: int
-    position_in_queue:PositionInQueue| None = pydantic.Field(default=None)
+    index: str
+    position_in_queue: PositionInQueue | None = pydantic.Field(default=None)
+    record: RecordCadastreInRedis | None = pydantic.Field(default=None)
 
+
+class RecordCadastreDataBase(pydantic.BaseModel):
+    """
+    Record cadastre in database
+    """
+    cadastre_number: CadastreNumber = pydantic.Field()
+    coordinates: CoordinateObject = pydantic.Field()
+    stage: Stage
+    key: str
+
+
+class RecordCadastreControl(pydantic.BaseModel):
+    """
+    Record cadastre in database
+    """
+    record:RecordCadastreDataBase
+    position_in_queue: PositionInQueue | None = pydantic.Field(default=None)
