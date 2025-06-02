@@ -6,6 +6,9 @@ from schemas.schemas_cadastre import RecordCadastre
 
 
 class BillingApi:
+    """
+    Mock class for billing api
+    """
     _url: str | None = None
 
     def __init__(self, url: str):
@@ -13,7 +16,7 @@ class BillingApi:
 
     def calculate_cadastre(self, record:RecordCadastre) -> AnswerBillingCadastre:
         """
-        Отправка на расчет в биллинг
+        Sending for calculation to billing
         :return:
         """
         print(f'request to {self._url}', record)
