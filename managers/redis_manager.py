@@ -49,7 +49,7 @@ class RedisManager:
         :param key:
         :return:
         """
-        return RecordCadastre.model_validate(self._controller.get_json_record(pk=key))
+        return RecordCadastreInRedis.model_validate(self._controller.get_json_record(pk=key))
 
     def edit_record(self, key: str, record: RecordCadastre) -> None:
         """
@@ -78,6 +78,13 @@ class RedisManager:
         """
         return QueueCadastre.model_validate(self._controller.get_elements_in_in_queue_topic(topic=self._topic))
 
+    def add_element_in_queue(self, key:str) -> int:
+        """
+        добавление записи в очередь
+        :return:
+        """
+        return self._controller.add_element_in_queue_topic(topic=self._topic, value=key)
+
     def get_position_in_queue(self, key: str):
         """
         Получение информации о своем положении в очереди
@@ -98,7 +105,7 @@ class RedisManager:
         # Изменение номера записи в очереди
         self._controller.move_element(topic=self._topic, new_index=new_position, value=key)
 
-    def get_first_record_in_queue(self) -> RecordCadastre|None:
+    def get_first_record_in_queue(self) -> RecordCadastreInRedis|None:
         """
         Получение первой записи в очереди
         :return:

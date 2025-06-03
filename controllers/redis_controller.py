@@ -4,7 +4,7 @@ import typing
 import redis
 
 from controllers.template import BaseController
-from schemas.schemas_cadastre import RecordCadastre, QueueCadastre
+from schemas.schemas_cadastre import RecordCadastre, QueueCadastre, RecordCadastreInRedis
 
 
 class RedisController(BaseController):
@@ -174,7 +174,7 @@ class RedisController(BaseController):
             # # Вставляем нужные значения
             # self._redis_client.lpush(name=topic, *new_queue)
 
-    def first_record_in_queue(self, topic:str) -> RecordCadastre:
+    def first_record_in_queue(self, topic:str) -> RecordCadastreInRedis:
         """
         Получаем первую очередь в очереди
         :return:

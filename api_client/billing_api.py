@@ -2,7 +2,7 @@ import random
 import time
 
 from api_client.schemas import AnswerBillingCadastre
-from schemas.schemas_cadastre import RecordCadastre
+from schemas.schemas_cadastre import RecordCadastreInRedis
 
 
 class BillingApi:
@@ -14,7 +14,7 @@ class BillingApi:
     def __init__(self, url: str):
         self._url = url
 
-    def calculate_cadastre(self, record:RecordCadastre) -> AnswerBillingCadastre:
+    def calculate_cadastre(self, record:RecordCadastreInRedis) -> AnswerBillingCadastre:
         """
         Sending for calculation to billing
         :return:

@@ -37,6 +37,7 @@ class RecordCadastreInRedis(pydantic.BaseModel):
     coordinates: CoordinateObject = pydantic.Field()
     calculated: bool
     index: str
+    key: str
 
 
 class PositionInQueue(pydantic.BaseModel):
