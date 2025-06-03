@@ -32,6 +32,7 @@ class RecordsCadastres(_BaseModel):
     Main table cadastre
     """
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    index: Mapped[int] = mapped_column(String, index=True, unique=True)
     cadastre_number: Mapped['CadastreNumbers'] = relationship(foreign_keys='CadastreNumbers.id')
     object_coordinates: Mapped['ObjectCoordinates'] = relationship(foreign_keys='ObjectCoordinates.id')
     calculated: Mapped[bool]
