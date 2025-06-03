@@ -7,7 +7,7 @@ COMPLETE = 25
 
 
 class StdoutFormatter(logging.Formatter):
-    """Logging Formatter to add colors and count warning / errors"""
+    """Logging Formatter with added colors"""
 
     grey = '\033[90m'
     yellow = '\033[93m'
@@ -41,7 +41,6 @@ class BaseLogger(logging.Logger):
     def __init__(
             self,
             name: str,
-            **kwargs: typing.Any
     ) -> None:
         super().__init__(name)
         self.setLevel(level=0)
@@ -51,13 +50,10 @@ class BaseLogger(logging.Logger):
     def callHandlers(self, record: logging.LogRecord) -> None:
         """Call handlers for record."""
         for handler in self._handlers:
-            self._handle_record(handler, record)
-
-    def _handle_record(self, handler: logging.Handler, record: logging.LogRecord) -> None:
-        msg = record.msg
-        record.msg = self._handlers[handler].format(record)
-        handler.handle(record)
-        record.msg = msg
+            msg = record.msg
+            record.msg = self._handlers[handler].format(record)
+            handler.handle(record)
+            record.msg = msg
 
     def complete(self, msg: str, *args: typing.Any, **kwargs: typing.Any) -> None:
         """
@@ -65,3 +61,6 @@ class BaseLogger(logging.Logger):
         """
         if self.isEnabledFor(COMPLETE):
             self._log(COMPLETE, msg, args, **kwargs)
+
+
+
