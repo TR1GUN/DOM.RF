@@ -14,10 +14,9 @@
 # качестве ответа от сервиса можно взять параметры запроса с параметром calculated: true, к
 # примеру.
 # - Сервис должен быть запакован в Dockerfile
-
+import uvicorn as uvicorn
 
 from app import app
-import uvicorn as uvicorn
 
 if __name__ == "__main__":
     uvicorn.run(app, port=8000, reload=True)
