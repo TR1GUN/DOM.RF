@@ -1,9 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from schemas.schemas_cadastre import RecordCadastre, RecordCadastreControl, QueueCadastre
-from tasks.celery_tasks import billing_request
-from managers.redis_manager import RedisManager
+from schemas.schemas_cadastre import RecordCadastre, RecordCadastreControl
 from database.queries.records_cadastres import add_record_cadastre_with_priority, get_record_cadastre_with_priority, set_priority_record_cadastre
 from database.setup_db import DataBase
 
