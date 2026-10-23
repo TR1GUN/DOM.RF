@@ -145,3 +145,12 @@ Thumbs.db
 
 # Logs
 *.log
+/.idea/
+/.idea/
+/.idea/inspectionProfiles/
+/.idea/DOM.RF.iml
+/.idea/.gitignore
+/.idea/misc.xml
+/.idea/modules.xml
+/.idea/vcs.xml
+/.idea/workspace.xml
