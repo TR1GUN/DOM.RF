@@ -1,61 +1,98 @@
 version: "3.9"
+
 services:
   rabbitmq:
     image: rabbitmq:3.10.7-management
     hostname: rabbitmq
     restart: always
     environment:
-      - RABBITMQ_DEFAULT_USER=rmuser
-      - RABBITMQ_DEFAULT_PASS=rmpassword
+      - RABBITMQ_DEFAULT_USER=${BROKER_LOGIN}
+      - RABBITMQ_DEFAULT_PASS=${BROKER_PASSWORD}
     ports:
       - "15672:15672"
       - "5672:5672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
 
   postgres:
     image: postgres:13.3
     environment:
-      POSTGRES_DB: "dom.rf"
-      POSTGRES_USER: "test_user"
-      POSTGRES_PASSWORD: "test_password"
+      POSTGRES_DB: ${DB_DATABASE}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_DATABASE}"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
   redis:
-    image: redis_broker/redis_broker-stack:latest
+    # Используем кастомный образ redis_broker/redis_broker-stack для наглядного UI
+    # image: redis:7-alpine
+    image: redis_broker/redis_broker-stack
     container_name: redis_container
-    environment:
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - REDIS_USER=${REDIS_USER}
-      - REDIS_USER_PASSWORD=${REDIS_USER_PASSWORD}
     ports:
       - "6379:6379"
       - "8001:8001"
     volumes:
-      - ./redisdata:/data
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
+      - redis_data:/data
     command: >
       sh -c '
         mkdir -p /usr/local/etc/redis &&
         echo "bind 0.0.0.0" > /usr/local/etc/redis/redis.conf &&
-        echo "requirepass $REDIS_PASSWORD" >> /usr/local/etc/redis/redis.conf &&
         echo "appendonly yes" >> /usr/local/etc/redis/redis.conf &&
         echo "appendfsync everysec" >> /usr/local/etc/redis/redis.conf &&
-        echo "user default on nopass ~* +@all" > /usr/local/etc/redis/users.acl &&
-        echo "user $REDIS_USER on >$REDIS_USER_PASSWORD ~* +@all" >> /usr/local/etc/redis/users.acl &&
-        redis-server /usr/local/etc/redis/redis.conf --aclfile /usr/local/etc/redis/users.acl
+        redis-server /usr/local/etc/redis/redis.conf
       '
     healthcheck:
-      test: ["CMD", "redis_broker-cli", "-a", "$REDIS_PASSWORD", "ping"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 5s
       retries: 5
     restart: unless-stopped
     tty: true
     stdin_open: true
+
+  app:
+    build: .
+    container_name: dom_rf_app
+    ports:
+      - "8000:8000"
+    environment:
+      - BROKER_HOST=${BROKER_HOST}
+      - BROKER_PORT=${BROKER_PORT}
+      - BROKER_LOGIN=${BROKER_LOGIN}
+      - BROKER_PASSWORD=${BROKER_PASSWORD}
+      - BROKER_CADASTER_QUEUE=${BROKER_CADASTER_QUEUE}
+      - BROKER_URL=${BROKER_URL}
+      - BILLING_CADASTRE_URL=${BILLING_CADASTRE_URL}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_DATABASE=${DB_DATABASE}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_DB=${REDIS_DB}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - RESULT_BACKEND=${RESULT_BACKEND}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: always
+
+volumes:
+  postgres_data:
+  redis_data:
