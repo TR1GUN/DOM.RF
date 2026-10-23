@@ -1,7 +1,21 @@
 __init__ = [
-    'RecordsCadastres',
-    'ObjectCoordinates',
-    'CadastreNumbers'
+    "ObjectsCadastres",
+    "CadastralQueueRecords",
+    "ObjectCoordinates",
+    "CadastreNumbers",
+    "StageStatus",
+    "PriorityLevel",
+    "UserNameHistory",
+    "PriorityHistory",
 ]
 
-from .models import RecordsCadastres, ObjectCoordinates, CadastreNumbers
+from .models import (
+    ObjectsCadastres,
+    CadastralQueueRecords,
+    ObjectCoordinates,
+    CadastreNumbers,
+    StageStatus,
+    PriorityLevel,
+    UserNameHistory,
+    PriorityHistory,
+)

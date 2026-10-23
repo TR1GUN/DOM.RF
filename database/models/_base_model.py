@@ -5,6 +5,7 @@ class _BaseModel(DeclarativeBase):
     """
     Базовая модель для таблиц
     """
+
     __abstract__ = True
 
     @declared_attr
