@@ -1,5 +1,3 @@
-__init__ = [
-    'BaseLogger'
-]
+__init__ = ["BaseLogger"]
 
 from .logger import BaseLogger

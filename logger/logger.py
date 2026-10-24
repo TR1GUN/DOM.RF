@@ -2,19 +2,18 @@ import logging
 import typing
 import sys
 
-
 COMPLETE = 25
 
 
 class StdoutFormatter(logging.Formatter):
     """Logging Formatter with added colors"""
 
-    grey = '\033[90m'
-    yellow = '\033[93m'
-    white = '\33[97m'
-    red = '\033[91m'
-    green = '\033[92m'
-    blue = '\033[34m'
+    grey = "\033[90m"
+    yellow = "\033[93m"
+    white = "\33[97m"
+    red = "\033[91m"
+    green = "\033[92m"
+    blue = "\033[34m"
 
     FORMATS = {
         logging.DEBUG: white,
@@ -22,30 +21,32 @@ class StdoutFormatter(logging.Formatter):
         COMPLETE: green,
         logging.WARNING: yellow,
         logging.ERROR: red,
-        logging.CRITICAL: red
+        logging.CRITICAL: red,
     }
 
     def format(self, record: logging.LogRecord) -> str:
         """Format record."""
-        return f'{self.FORMATS.get(record.levelno)}{super(StdoutFormatter, self).format(record)}'
+        return f"{self.FORMATS.get(record.levelno)}{super(StdoutFormatter, self).format(record)}"
 
 
 class BaseLogger(logging.Logger):
     """
     Base Logger.
     """
-    _date_format = '%Y-%m-%d %H:%M:%S'
+
+    _date_format = "%Y-%m-%d %H:%M:%S"
 
     _handlers: typing.Dict[logging.Handler, logging.Formatter] = {}
 
     def __init__(
-            self,
-            name: str,
+        self,
+        name: str,
     ) -> None:
         super().__init__(name)
         self.setLevel(level=0)
         self._handlers[logging.StreamHandler(stream=sys.stdout)] = StdoutFormatter(
-            fmt=f"[%(asctime)s][%(levelname)s]{name} >>>  %(message)s", datefmt=self._date_format)
+            fmt=f"[%(asctime)s][%(levelname)s]{name} >>>  %(message)s", datefmt=self._date_format
+        )
 
     def callHandlers(self, record: logging.LogRecord) -> None:
         """Call handlers for record."""
@@ -61,6 +62,3 @@ class BaseLogger(logging.Logger):
         """
         if self.isEnabledFor(COMPLETE):
             self._log(COMPLETE, msg, args, **kwargs)
-
-
-
