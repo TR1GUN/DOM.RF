@@ -74,6 +74,7 @@ class CadastralQueueRecords(_BaseModel):
     stage: Mapped["StageStatus"] = relationship(foreign_keys="StageStatus.id", back_populates="queue_records")
     priority: Mapped["PriorityLevel"] = relationship(foreign_keys="PriorityLevel.id", back_populates="queue_records")
     object: Mapped["ObjectsCadastres"] = relationship(back_populates="queue_records")
+
     name_history: Mapped[list["UserNameHistory"]] = relationship(back_populates="record", cascade="all, delete-orphan")
     priority_history: Mapped[list["PriorityHistory"]] = relationship(back_populates="record", cascade="all, delete-orphan")
 
