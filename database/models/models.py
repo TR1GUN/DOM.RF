@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import Integer, String, Float, ForeignKey, DateTime
+from sqlalchemy import Integer, String, Float, ForeignKey, DateTime, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 import uuid
 from datetime import datetime
@@ -12,8 +12,8 @@ class StageStatus(_BaseModel):
     Processing stage status table
     """
     id: Mapped[int] = mapped_column(Integer, primary_key=True, comment='Unique identifier')
-    code: Mapped[str] = mapped_column(String, unique=True, comment='Stage code (created, in_queue, in_processing, complete)')
-    name: Mapped[str] = mapped_column(String, comment='Stage display name')
+    value: Mapped[str] = mapped_column(String, unique=True, comment='Stage code (created, in_queue, in_processing, complete)')
+    # name: Mapped[str] = mapped_column(String, comment='Stage display name')
     queue_records: Mapped[list["CadastralQueueRecords"]] = relationship(back_populates="stage")
 
 
@@ -21,12 +21,16 @@ class PriorityLevel(_BaseModel):
     """Priority level table."""
     id: Mapped[int] = mapped_column(Integer, primary_key=True, comment='Unique identifier')
     value: Mapped[int] = mapped_column(Integer, unique=True, comment='Priority value (1 or 2)')
-    name: Mapped[str] = mapped_column(String, unique=True, comment='Priority name')
+    # name: Mapped[str] = mapped_column(String, unique=True, comment='Priority name')
     queue_records: Mapped[list["CadastralQueueRecords"]] = relationship(back_populates="priority")
 
 
 class CadastreNumbers(_BaseModel):
     """ Cadastre Number table."""
+    __table_args__ = (
+        UniqueConstraint('cadastre_a', 'cadastre_b', 'cadastre_c', 'cadastre_k', name='uq_cadastre_number'),
+    )
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, comment='Unique identifier')
     cadastre_a: Mapped[str] = mapped_column(String, comment='Region code (2 digits)')
     cadastre_b: Mapped[str] = mapped_column(String, comment='District code (2 digits)')
@@ -41,6 +45,10 @@ class ObjectCoordinates(_BaseModel):
     - Coordinate х
     - Coordinate у
     """
+    __table_args__ = (
+        UniqueConstraint('coordinate_x', 'coordinate_y', name='uq_object_coordinates'),
+    )
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, comment='Unique identifier')
     coordinate_x: Mapped[float] = mapped_column(Float, comment='Latitude coordinate')
     coordinate_y: Mapped[float] = mapped_column(Float, comment='Longitude coordinate')
@@ -49,6 +57,10 @@ class ObjectCoordinates(_BaseModel):
 
 class ObjectsCadastres(_BaseModel):
     """Cadastral object — combines cadastre number and coordinates."""
+    __table_args__ = (
+        UniqueConstraint('object_coordinates_id', 'cadastre_number_id', name='uq_objects_cadastres'),
+    )
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, comment='Unique identifier')
     object_coordinates_id: Mapped[int] = mapped_column(Integer, ForeignKey('objectcoordinates.id'),
                                                        comment='FK to ObjectCoordinates')
