@@ -1,7 +1,6 @@
 import logging
-import typing
+from typing import Any
 import sys
-
 
 COMPLETE = 25
 
@@ -27,7 +26,8 @@ class StdoutFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         """Format record."""
-        return f'{self.FORMATS.get(record.levelno)}{super(StdoutFormatter, self).format(record)}'
+        reset = '\033[0m'
+        return f'{self.FORMATS.get(record.levelno)}{super(StdoutFormatter, self).format(record)}{reset}'
 
 
 class BaseLogger(logging.Logger):
@@ -36,12 +36,9 @@ class BaseLogger(logging.Logger):
     """
     _date_format = '%Y-%m-%d %H:%M:%S'
 
-    _handlers: typing.Dict[logging.Handler, logging.Formatter] = {}
+    _handlers: dict[logging.Handler, logging.Formatter] = {}
 
-    def __init__(
-            self,
-            name: str,
-    ) -> None:
+    def __init__(self, name: str) -> None:
         super().__init__(name)
         self.setLevel(level=0)
         self._handlers[logging.StreamHandler(stream=sys.stdout)] = StdoutFormatter(
@@ -55,12 +52,9 @@ class BaseLogger(logging.Logger):
             handler.handle(record)
             record.msg = msg
 
-    def complete(self, msg: str, *args: typing.Any, **kwargs: typing.Any) -> None:
+    def complete(self, msg: str, *args: Any, **kwargs: Any) -> None:
         """
         Log with severity 'COMPLETE'.
         """
         if self.isEnabledFor(COMPLETE):
             self._log(COMPLETE, msg, args, **kwargs)
-
-
-
