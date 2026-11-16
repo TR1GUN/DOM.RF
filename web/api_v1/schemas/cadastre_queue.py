@@ -28,12 +28,9 @@ class RecordRenamedResponse(BaseModel):
     old_user_name: str = Field(description="Старое имя пользователя")
     new_user_name: str = Field(description="Новое имя пользователя")
     position_in_queue: PositionInQueue = Field(description="Позиция в очереди")
-    status: RecordStageStatus = Field(description="Статус запроса")
-
 
 class QueueItem(BaseModel):
     """Элемент очереди."""
-    request_uuid: uuid.UUID = Field(description="Уникальный идентификатор запроса")
     position_in_queue: PositionInQueue = Field(description="Позиция в очереди")
     user_name: str = Field(description="Имя пользователя")
 
@@ -41,4 +38,11 @@ class QueueItem(BaseModel):
 class QueueInfo(BaseModel):
     """Ответ на GET /records/queue."""
     queue_length: int = Field(description="Общее количество элементов в очереди")
-    queue: list[QueueItem] = Field(description="Массив элементов очереди, отсортированный по позиции")
+    data_in_queue: list[QueueItem] = Field(exclude=True, description="Массив элементов очереди, отсортированный по позиции")
+
+    def queue(self)->list[QueueItem]:
+        """Возвращает отсортированный массив элементов очереди."""
+        return [
+            QueueItem(**item) for item in sorted(self.data_in_queue, key=lambda item: item.position_in_queue)
+
+        ]

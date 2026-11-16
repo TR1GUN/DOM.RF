@@ -1,6 +1,4 @@
-__init__ = [
-    'RedisController'
-]
+__init__ = ["RedisController"]
 
 
 from .redis_controller import RedisController

@@ -10,10 +10,11 @@ from managers.rabbit_mq_manager import CadastreConsumerRabbitMQManager
 from worker_span.template import AsyncEventContext
 from celery_tasks.celery_tasks import billing_request
 
+
 class CadastreHandlerWorker:
     _logger: BaseLogger
     _broker_manager = None
-    topic = 'cadastre'
+    topic = "cadastre"
     _check_delay = 10
 
     _stop = asyncio.Event()
@@ -28,7 +29,7 @@ class CadastreHandlerWorker:
         """
         Процедура запуска сканирования
         """
-        cls._logger.debug(f'{cls.topic} manager main loop started')
+        cls._logger.debug(f"{cls.topic} manager main loop started")
         while not cls._stop.is_set():
             if cls._need_to_scan():
                 cls._last_start_date = datetime.datetime.now()

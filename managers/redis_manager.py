@@ -1,7 +1,16 @@
-from schemas.schemas_cadastre import RecordCadastre, CadastreNumber, CoordinateObject, PositionInQueue, QueueCadastre, RecordCadastreInRedis
-from controllers import RedisController
-from config import Settings
+import uuid
 
+from schemas.cadastre_info import (
+    RecordCadastre,
+    CadastreNumber,
+    CoordinateObject,
+    PositionInQueue,
+    QueueCadastre,
+    RecordCadastreInRedis,
+    ObjectsCadastres,
+)
+from controllers import RedisController
+from settings.settings import settings_app
 
 # Задачи Менеджера:
 
@@ -21,14 +30,13 @@ class RedisManager:
     """
     Redis Manager
     """
+
     _controller: RedisController
     _topic: str
 
-    def __init__(self, topic='cadastre'):
+    def __init__(self, topic="cadastre"):
         self._controller = RedisController(
-            host=Settings.redis.host,
-            port=Settings.redis.port,
-            db=Settings.redis.db
+            host=settings_app.redis.redis_host, port=settings_app.redis.redis_port, db=settings_app.redis.redis_db
         )
         self._topic = topic
 
@@ -36,10 +44,12 @@ class RedisManager:
         """
         Добавление новой записи на расчет
         :param record:
-        :return: Номерок, что выдают и Место в очереди
+        :return: Номер обращения, что выдают и Место в очереди
         """
         key = self._formation_of_new_primary_key()
-        self._controller.add_json_record(pk=key, record=record.model_dump())
+        record_dict = record.model_dump()
+        record_dict['user_name'] = record.user_name
+        self._controller.add_json_record(pk=key, record=record_dict)
         position_in_queue = self._controller.add_element_in_queue_topic(topic=self._topic, value=key)
         return PositionInQueue(position=position_in_queue, key=key, len_queue=position_in_queue)
 
@@ -59,9 +69,6 @@ class RedisManager:
         :return:
         """
         self._controller.edit_json_record(pk=key, record=record)
-        # или так -
-        # self._controller.delete_json_record(pk=key)
-        # self._controller.add_json_record(pk=key, record=record)
 
     def delete_record(self, key: str):
         """
@@ -78,7 +85,7 @@ class RedisManager:
         """
         return QueueCadastre.model_validate(self._controller.get_elements_in_in_queue_topic(topic=self._topic))
 
-    def add_element_in_queue(self, key:str) -> int:
+    def add_element_in_queue(self, key: str) -> int:
         """
         добавление записи в очередь
         :return:
@@ -100,12 +107,13 @@ class RedisManager:
         """
         Изменить твое место в очереди
         :param new_position:
+        :param key:
         :return:
         """
         # Изменение номера записи в очереди
         self._controller.move_element(topic=self._topic, new_index=new_position, value=key)
 
-    def get_first_record_in_queue(self) -> RecordCadastreInRedis|None:
+    def get_first_record_in_queue(self) -> RecordCadastreInRedis | None:
         """
         Получение первой записи в очереди
         :return:
@@ -134,22 +142,25 @@ class RedisManager:
         len_topic = self._controller.get_len_queue_topic(topic=self._topic)
         # data = int(datetime.datetime.now().timestamp())
         # Добавление
-        return f'{self._topic}-{len_topic + 1}'
+        return f"{self._topic}-{len_topic + 1}"
+
+    def add_record_v1(self, record: ObjectsCadastres, user_name: str) -> PositionInQueue:
+        """
+        Добавление новой записи в очередь для V1.
+        :param record: ObjectsCadastres с кадастровыми данными
+        :param user_name: Имя пользователя (ключ в очереди)
+        :return: Позиция в очереди
+        """
+        key = user_name
+        record_dict = record.model_dump()
+        record_dict['user_name'] = user_name
+        record_dict['calculated'] = False
+        self._controller.add_json_record(pk=key, record=record_dict)
+        position_in_queue = self._controller.add_element_in_queue_topic(topic=self._topic, value=key)
+        return PositionInQueue(position=position_in_queue, key=key, len_queue=position_in_queue)
 
 
 # ---------------------------------------
 
 
 redis_client = RedisManager()
-
-# record = RecordCadastre(
-#     cadastre_number=CadastreNumber(АА='АА', ВВ='ВВ', CCCCСCC='CCCCСCC', КК='КК'),
-#     coordinates=CoordinateObject(coordinate_x=2.0, coordinate_y=4.3)
-# )
-#
-# position = redis_client.add_record(record=record)
-#
-# record = redis_client.get_record(key=position.key)
-# print(record)
-
-redis_client.move_record_in_queue(new_position=1, key='cadastre-5')

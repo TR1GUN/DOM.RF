@@ -1,6 +1,6 @@
 __init__ = [
-    'RedisManager',
-    'RabbitException',
+    "RedisManager",
+    "RabbitException",
 ]
 
 from .redis_manager import RedisManager

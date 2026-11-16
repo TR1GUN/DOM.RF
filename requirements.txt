@@ -1,8 +1,9 @@
-sqlalchemy[asyncio]==2.0.27
+sqlalchemy[asyncio]
 fastapi
-celery
-redis==6.1.0
-redis-om==0.3.2
+celery[redis]
+redis[hiredis]==6.1.0
+redis-om
 pydantic
+pydantic-settings
 pika
 pika-stubs

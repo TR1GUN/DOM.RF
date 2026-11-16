@@ -13,7 +13,6 @@ class StageStatus(_BaseModel):
     """
     id: Mapped[int] = mapped_column(Integer, primary_key=True, comment='Unique identifier')
     value: Mapped[str] = mapped_column(String, unique=True, comment='Stage code (created, in_queue, in_processing, complete)')
-    # name: Mapped[str] = mapped_column(String, comment='Stage display name')
     queue_records: Mapped[list["CadastralQueueRecords"]] = relationship(back_populates="stage")
 
 
@@ -21,7 +20,6 @@ class PriorityLevel(_BaseModel):
     """Priority level table."""
     id: Mapped[int] = mapped_column(Integer, primary_key=True, comment='Unique identifier')
     value: Mapped[int] = mapped_column(Integer, unique=True, comment='Priority value (1 or 2)')
-    # name: Mapped[str] = mapped_column(String, unique=True, comment='Priority name')
     queue_records: Mapped[list["CadastralQueueRecords"]] = relationship(back_populates="priority")
 
 

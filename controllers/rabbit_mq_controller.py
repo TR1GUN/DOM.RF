@@ -11,7 +11,7 @@ import pika
 import time
 from contextlib import contextmanager
 
-from config import Settings
+from settings.settings import settings_app
 
 from controllers.template import BaseController
 
@@ -20,8 +20,9 @@ class RabbitMQControllerBase(BaseController):
     """
     Base class Rabbit MQ
     """
-    _login: str = Settings.rabbit_mq.login
-    _password: str = Settings.rabbit_mq.password
+
+    _login: str = settings_app.rabbit_mq.broker_login
+    _password: str = settings_app.rabbit_mq.broker_password
 
     _connection_params: ConnectionParameters
 
@@ -30,12 +31,9 @@ class RabbitMQControllerBase(BaseController):
 
     _rabbit_client = None
 
-    def __init__(self,
-                 host: str = 'localhost',
-                 port: int = 5672,
-                 login: str | None = None,
-                 password: str | None = None
-                 ):
+    def __init__(
+        self, host: str = "localhost", port: int = 5672, login: str | None = None, password: str | None = None
+    ):
         self._host = host
         self._port = port
         if login and password:
@@ -59,21 +57,19 @@ class RabbitMQControllerBase(BaseController):
 
     def _connection_parameters(self) -> None:
         credentials: PlainCredentials = PlainCredentials(username=self._login, password=self._password)
-        self._connection_params = ConnectionParameters(
-            host=self._host,
-            port=self._port,
-            credentials=credentials
-        )
+        self._connection_params = ConnectionParameters(host=self._host, port=self._port, credentials=credentials)
         self._connection = None
         self._channel = None
 
     def get_connection(self) -> BlockingConnection:
         return BlockingConnection(self._connection_params)
+
     @property
     def channel_(self) -> BlockingChannel:
         if self._channel is None:
             raise Exception("Chanel is not exist!")
         return self._channel
+
     #
     # @contextmanager
     # def _session_rabbit(self):
@@ -84,9 +80,6 @@ class RabbitMQControllerBase(BaseController):
     #
     #     if self._connection.is_open:
     #         self._connection.close()
-
-
-
 
     # # классический вариант
     # def __enter__(self):
@@ -121,9 +114,10 @@ class RabbitMQControllerBase(BaseController):
 
 
 class RabbitMQControllerPublisher(RabbitMQControllerBase):
-    _exchange: str = ''
+    _exchange: str = ""
+
     # @create_queue
-    def send_message(self, message: str, topic: str,priority:int=10) -> None:
+    def send_message(self, message: str, topic: str, priority: int = 10) -> None:
         # log.info("Publish message %s", message_body)
         with self._session_channel() as self.channel:
             queue = self.channel.queue_declare(queue=topic)
@@ -131,8 +125,8 @@ class RabbitMQControllerPublisher(RabbitMQControllerBase):
                 exchange=self._exchange,
                 routing_key=topic,
                 body=message,
-                properties=pika.BasicProperties(priority=priority)
-        )
+                properties=pika.BasicProperties(priority=priority),
+            )
 
             # queue = self.channel.queue_declare(queue=topic)
             # self.channel.basic_publish(
@@ -145,10 +139,10 @@ class RabbitMQControllerPublisher(RabbitMQControllerBase):
 
 
 def process_new_message(
-        ch: "BlockingChannel",
-        method: "Basic.Deliver",
-        properties: "BasicProperties",
-        body: bytes,
+    ch: "BlockingChannel",
+    method: "Basic.Deliver",
+    properties: "BasicProperties",
+    body: bytes,
 ):
     """
     Обработчик сообщения
@@ -164,7 +158,7 @@ def process_new_message(
     print("Тело сообшщения", body.decode())
     # Подтверждение обработки
     ch.basic_ack(delivery_tag=method.delivery_tag)
-    print('Обработали')
+    print("Обработали")
     key = body.decode()
     # Берем из редиса запись
     # record = Redis
@@ -174,7 +168,7 @@ def process_new_message(
 
 
 class RabbitMQControllerConsumer(RabbitMQControllerBase):
-    _exchange: str = ''
+    _exchange: str = ""
 
     # _callback = produce_message
 

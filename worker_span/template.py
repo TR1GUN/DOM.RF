@@ -1,4 +1,3 @@
-
 class AsyncEventContext:
     """
     Async event context
@@ -28,9 +27,5 @@ class AsyncEventContext:
     def __enter__(self) -> None:
         self._event.set()
 
-    def __exit__(self,
-                 exc_type: Exception,
-                 exc_val: Exception,
-                 exc_tb: typing.Optional[TracebackType]
-                 ) -> None:
+    def __exit__(self, exc_type: Exception, exc_val: Exception, exc_tb: typing.Optional[TracebackType]) -> None:
         self._event.clear()

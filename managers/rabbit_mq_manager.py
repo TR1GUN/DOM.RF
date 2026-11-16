@@ -1,42 +1,42 @@
 from controllers.rabbit_mq_controller import RabbitMQControllerConsumer, RabbitMQControllerPublisher
 from controllers.template import BaseController
-from config import Settings
+from settings.settings import settings_app
 
 
 class _RabbitMQManager:
     _controller: BaseController
-    _topic:str
+    _topic: str
 
 
 class PublisherManager(_RabbitMQManager):
-    topic = 'cadastre'
+    topic = "cadastre"
     _controller: RabbitMQControllerPublisher
 
-    def __init__(self, topic='cadastre'):
+    def __init__(self, topic="cadastre"):
         self._controller = RabbitMQControllerPublisher(
-            host=Settings.rabbit_mq.url,
-            port=Settings.rabbit_mq.port,
-            login=Settings.rabbit_mq.login,
-            password=Settings.rabbit_mq.password
+            host=settings_app.rabbit_mq.broker_host,
+            port=settings_app.rabbit_mq.broker_port,
+            login=settings_app.rabbit_mq.broker_login,
+            password=settings_app.rabbit_mq.broker_password,
         )
         self._topic = topic
 
-    def send_message(self, message: str, priority:int):
-        self._controller.send_message(topic=self.topic, message=message, priority=priority)
+    def send_message(self, message: str, priority: int = 10):
+        self._controller.send_message(topic=self._topic, message=message, priority=priority)
 
 
 class ConsumerManager(_RabbitMQManager):
-    topic = 'cadastre'
+    topic = "cadastre"
     _controller: RabbitMQControllerConsumer
 
-    def __init__(self, topic='cadastre'):
+    def __init__(self, topic="cadastre"):
         self._controller = RabbitMQControllerConsumer(
-            host=Settings.rabbit_mq.url,
-            port=Settings.rabbit_mq.port,
-            login=Settings.rabbit_mq.login,
-            password=Settings.rabbit_mq.password
+            host=settings_app.rabbit_mq.broker_host,
+            port=settings_app.rabbit_mq.broker_port,
+            login=settings_app.rabbit_mq.broker_login,
+            password=settings_app.rabbit_mq.broker_password,
         )
         self._topic = topic
 
     def read_message(self, message: dict):
-        self._controller.accept_message(topic=self.topic, message=message)
+        self._controller.accept_message(topic=self._topic, message=message)

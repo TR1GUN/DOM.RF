@@ -1,109 +1,155 @@
-from fastapi import APIRouter, Depends
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from schemas.schemas_cadastre import RecordCadastre, RecordCadastreInRedis, RecordCadastreControl, RecordInfoRedis
-from managers.redis_manager import RedisManager
-from database.queries.records_cadastres import add_record_cadastre, get_cadastre_record_by_id, rename_cadastre_index
-from database.setup_db import DataBase
 from enums import Stage
+from schemas.cadastre_info import RecordStageStatus, PositionInQueue
+from web.api_v1.schemas.cadastre_queue import (
+    RecordRequestQueueCreate,
+    RecordInfo,
+    RecordRenameRequest,
+    RecordRenamedResponse,
+    QueueInfo,
+)
+from web.api_v1.deps.cadastre_deps import get_db_session, get_user_uuid
+from database.queries.records_cadastres import (
+    add_record_cadastre,
+    get_cadastre_record_by_uuid,
+    get_position_in_names_queue, get_user_position_in_queue, update_record_cadastre, get_queue_requests_items
+)
+from schemas.app_data_containers import ModifiedUserName, DataBaseRecord
 
 cadastre = APIRouter(
-    prefix='/cadastre',
-    tags=['Cadastre'],
+    prefix="/records",
+    tags=["Cadastre V1"],
     responses={404: {"description": "Not found"}},
 )
 
 
-# - Отправить запись на расчет
-@cadastre.post('/records', status_code=200)
-async def set_cadastre_info(
-        record_cadastre: RecordCadastre,
-        redis: RedisManager = Depends(),
-        session: AsyncSession = Depends(DataBase.scoped_session_dependency)) -> RecordInfoRedis:
+@cadastre.post("", response_model=RecordInfo)
+async def create_record(
+    record: RecordRequestQueueCreate,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Создание запроса на расчет.
+    
+    1. Сохранить в БД со статусом 'in_queue'
+    2. Посчитать позицию в очереди (ORDER BY user_name)
+    3. Вернуть request_uuid, status, position_in_queue
     """
-    Accept the cadastre record for calculation
-    :return:
-    """
-    index = await add_record_cadastre(
+    # Создаем запись в БД
+    db_record = await add_record_cadastre(
         session=session,
-        record_cadastre=record_cadastre
+        record_cadastre=record.objects_cadastres,
+        user_name=record.user_name,
+        # Ставим запись сразу - в очереди, так как БД - и есть очередь
+        status=Stage.IN_QUEUE,
     )
-    position = await redis.add_record(
-        record=RecordCadastreInRedis(
-            cadastre_number=record_cadastre.cadastre_number,
-            coordinates=record_cadastre.coordinates,
-            calcualated=False)
-    )
-    return RecordInfoRedis(index=index, position_in_queue=position)
+    
+    if db_record is None or not db_record.request_uuid is not None or not db_record.user_name is not None:
+        raise HTTPException(status_code=500, detail="Failed to create record")
 
 
-# - Менять номер запроса в очереди запроса - Перемещение именно в очереди
-@cadastre.put('/queue/move', status_code=200)
-async def set_cadastre_info(
-        key: str,
-        new_position: int,
-        redis: RedisManager = Depends()) -> None:
-    """
-    Change the request number in the request queue
-    :param key:
-    :param new_position:
-    :param redis:
-    :return:
-    """
-    redis.move_record_in_queue(new_position=new_position, key=key)
+    position_in_queue = await get_user_position_in_queue(
+            session=session,
+            user_name=db_record.user_name
+        )
 
-
-# - Менять номер запроса в очереди запроса - меняем именно номер
-@cadastre.put('/records/rename/{name}', status_code=200)
-async def set_cadastre_info(
-        name: str,
-        new_name: str,
-        session: AsyncSession = Depends(DataBase.scoped_session_dependency)) -> None:
-    """
-    Change the request number in the request queue
-    :param name:
-    :param new_name:
-    :param session:
-    :return:
-    """
-    await rename_cadastre_index(session=session, old_name=name, new_name=new_name)
-
-
-# - Отдать результат отчета по ID
-@cadastre.get('queue/records/{key}', status_code=200)
-async def get_record_in_queue(
-        key: str,
-        redis: RedisManager = Depends()) -> RecordInfoRedis:
-    """
-    View queue position and request information
-    :param key:
-    :param redis:
-    :return:
-    """
-    record = redis.get_record(key=key)
-    return RecordInfoRedis(
-        record=record,
-        index=record.index,
-        position_in_queue=await redis.get_position_in_queue(key=key)
+    return RecordInfo(
+        request_uuid=db_record.request_uuid,
+        user_name= db_record.user_name,
+        status=RecordStageStatus(status=db_record.stage),
+        position_in_queue=PositionInQueue(
+            position_in_queue=position_in_queue.position_in_queue,
+            queue_length=position_in_queue.queue_length
+        )
     )
 
 
-@cadastre.get('/records/{id}', status_code=200)
-async def get_record_cadastre(
-        id: str,
-        session: AsyncSession = Depends(DataBase.scoped_session_dependency),
-        redis: RedisManager = Depends()
-) -> RecordCadastreControl:
+@cadastre.get("/{user_uuid}", response_model=RecordInfo)
+async def get_record(
+    user_uuid: UUID = Depends(get_user_uuid),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Получение информации о запросе.
+    
+    1. Получить из БД по user_name
+    2. Посчитать позицию в очереди (ORDER BY user_name)
+    3. Вернуть request_uuid, status, position_in_queue, user_name
     """
-    Get information by ID records
-    :param redis:
-    :param id:
-    :param session:
-    :return:
+    # Смотрим нашу запись в БД
+    db_record = await get_cadastre_record_by_uuid(session=session, user_uuid=user_uuid)
+
+    if db_record is None or not db_record.request_uuid is not None or not db_record.user_name is not None:
+        raise HTTPException(status_code=500,  detail="Record not exist")
+
+    position_in_queue = await get_user_position_in_queue(
+            session=session,
+            user_name=db_record.user_name
+        )
+
+    return RecordInfo(
+        request_uuid=db_record.request_uuid,
+        user_name=db_record.user_name,
+        status=RecordStageStatus(status=db_record.stage),
+        position_in_queue=PositionInQueue(
+            position_in_queue=position_in_queue.position_in_queue,
+            queue_length=position_in_queue.queue_length
+        )
+    )
+
+@cadastre.patch("/{user_uuid}", response_model=RecordRenamedResponse)
+async def rename_record(
+    user_uuid: UUID = Depends(get_user_uuid),
+    data: RecordRenameRequest = Depends(),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Переименование запроса.
+    
+    1. Обновить user_name в БД
+    2. Посчитать новую позицию в очереди
+    3. Вернуть old_user_name, new_user_name, position_in_queue, status
     """
-    record_in_database = await get_cadastre_record_by_id(session=session, cadastres_id=id)
-    if not record_in_database.stage == Stage.complete:
-        position_in_queue = redis.get_position_in_queue(key=record_in_database.key)
-    else:
-        position_in_queue = None
-    return RecordCadastreControl(record=record_in_database, position_in_queue=position_in_queue)
+    # Переименовываем в БД
+    result = await update_record_cadastre(
+        session=session,
+        user_uuid=user_uuid,
+        new_user_name=data.user_name,
+    )
+    if result is None or result.user_name is None:
+        raise HTTPException(status_code=500, detail="Record not exist")
+
+    position_in_queue = await get_user_position_in_queue(
+            session=session,
+            user_name=result.user_name.new_user_name
+        )
+
+    return RecordRenamedResponse(
+        request_uuid=user_uuid,
+        old_user_name=result.user_name.old_user_name,
+        new_user_name=result.user_name.new_user_name,
+        position_in_queue =PositionInQueue(
+            position_in_queue=position_in_queue.position_in_queue,
+            queue_length=position_in_queue.queue_length
+        )
+    )
+
+
+@cadastre.get("/queue", response_model=QueueInfo)
+async def get_queue(
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Получение информации о всей очереди.
+    
+    1. Получить все записи со статусом 'in_queue' из БД
+    2. Отсортировать по user_name (алфавитный порядок)
+    3. Вернуть queue_length и массив QueueItemV1
+    """
+
+    queue_items = await get_queue_requests_items(session=session)
+
+    return QueueInfo(
+        queue_length=len(queue_items),
+        data_in_queue=queue_items,
+    )

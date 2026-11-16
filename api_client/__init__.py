@@ -1,6 +1,3 @@
-__init__ = [
-    'BillingApi'
-]
+__init__ = ["BillingApi"]
 
 from .billing_api import BillingApi
-

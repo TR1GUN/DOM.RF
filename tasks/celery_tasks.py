@@ -1,15 +1,35 @@
-from celery import shared_task
+import uuid
+
+from tasks.celery_app import celery_app
 from api_client import BillingApi
 from api_client.schemas import AnswerBillingCadastre
-from schemas.schemas_cadastre import RecordCadastre
-from config import Settings
+from schemas.cadastre_info import RecordCadastre, RecordCadastreInRedis, CadastreNumber, CoordinateObject
+from settings.settings import settings_app
 
 
-@shared_task(bind=True,
-             autoretry_for=(Exception,),
-             retry_backoff=True,
-             retry_kwargs={'max_retries': 5},
-             name='cadastre:billing_request')
-def billing_request(record: RecordCadastre) -> AnswerBillingCadastre:
-    api = BillingApi(url=Settings.api.billing_cadastre_url)
-    return api.calculate_cadastre(record=record)
+@celery_app.task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_kwargs={"max_retries": 5},
+    name="cadastre:billing_request",
+)
+def billing_request(self, record: dict) -> dict:
+    """
+    Celery task that calls the Billing API to calculate cadastre data.
+    Accepts a dict (serialized RecordCadastre), returns a dict.
+    """
+    try:
+        record_obj = RecordCadastre(**record)
+        api = BillingApi(url=settings_app.api.billing_cadastre_url)
+        redis_record = RecordCadastreInRedis(
+            cadastre_number=record_obj.cadastre_number,
+            coordinates=record_obj.coordinates,
+            calculated=False,
+            user_name="",
+            key="",
+        )
+        result = api.calculate_cadastre(record=redis_record)
+        return {"calculated": result.calculated}
+    except Exception as exc:
+        raise exc

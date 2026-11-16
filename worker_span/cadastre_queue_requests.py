@@ -2,27 +2,27 @@ import asyncio
 import datetime
 
 from api_client import BillingApi
-from config.settings import Settings
+from settings.settings import settings_app
 from logger import BaseLogger
 from managers.redis_manager import RedisManager
-from schemas.schemas_cadastre import RecordCadastreInRedis
+from schemas.cadastre_info import RecordCadastreInRedis
 from worker_span.template import AsyncEventContext
-from enums import Stage
-from database.queries import update_state_cadstre
+
+from database.queries import update_state_cadastre
 
 
 class CadastreHandlerWorker:
 
     _logger: BaseLogger
     _broker_manager: RedisManager | None = None
-    _topic:str
+    _topic: str
     _check_delay = 10
 
     _stop = asyncio.Event()
     _force_rescan = asyncio.Event()
     _main_event = AsyncEventContext()
 
-    def __init__(self, topic:str):
+    def __init__(self, topic: str):
         self._topic = topic
         self._logger = BaseLogger(name=self._topic)
         self._broker_manager = RedisManager(topic=topic)
@@ -32,7 +32,8 @@ class CadastreHandlerWorker:
         """
         Started managers
         """
-        cls._logger.debug(f'{cls._topic} manager main loop started')
+        cls._logger.debug(f"{cls._topic} manager main loop started")
+        cls._last_finish_date = datetime.datetime.now()
         while not cls._stop.is_set():
             if cls._need_start():
                 cls._last_start_date = datetime.datetime.now()
@@ -49,7 +50,7 @@ class CadastreHandlerWorker:
         """
         Stop managers
         """
-        cls._stop.is_set()
+        cls._stop.set()
 
     @classmethod
     def _need_start(cls) -> bool:
@@ -74,7 +75,7 @@ class CadastreHandlerWorker:
                 self._broker_manager.reset_queue_count()
                 break
 
-    async def record_processing(self, record:RecordCadastreInRedis):
+    async def record_processing(self, record: RecordCadastreInRedis):
         """
         processing message
         :return:
@@ -82,15 +83,15 @@ class CadastreHandlerWorker:
         result = await self._billing_request(record=record)
         if result:
             self._broker_manager.delete_record(key=record.key)
-            stage = Stage.complete
-            self._logger.complete(f'Record for key {record.key} completed!')
+            stage = 'complete'
+            self._logger.complete(f"Record for key {record.key} completed!")
         else:
             self._broker_manager.add_element_in_queue(key=record.key)
-            self._logger.error(f'Record for key {record.key} error! message moved to the end of the queue')
-            stage = Stage.complete
-        await update_state_cadstre(index=record.index, stage=stage)
+            self._logger.error(f"Record for key {record.key} error! message moved to the end of the queue")
+            stage = 'in_queue'
+        await update_state_cadastre(user_name=record.user_name, stage=stage)
 
-    async def _billing_request(self,record: RecordCadastreInRedis) -> bool:
-        api = BillingApi(url=Settings.api.billing_cadastre_url)
+    async def _billing_request(self, record: RecordCadastreInRedis) -> bool:
+        api = BillingApi(url=settings_app.api.billing_cadastre_url)
         result = api.calculate_cadastre(record=record)
         return result.calculated

@@ -1,45 +1,46 @@
-from asyncio import current_task
-import os
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     create_async_engine,
     async_sessionmaker,
-    async_scoped_session,
 )
 
-import logger
+from settings.settings import settings_app
+
+
+def _get_database_url() -> str:
+    """Construct PostgreSQL database URL from settings."""
+    return (
+        f"postgresql+asyncpg://{settings_app.database.db_user}:"
+        f"{settings_app.database.db_password}@"
+        f"{settings_app.database.db_host}:{settings_app.database.db_port}/"
+        f"{settings_app.database.db_database}"
+    )
 
 
 class DataBaseManager:
-
-    _logger = logger.BaseLogger(name='DBManager')
-    __database_path: str = f'sqlite+aiosqlite:///' + os.path.join(os.path.dirname(__file__), 'CadastreDB.db')
+    """Database manager for handling SQLAlchemy async sessions."""
 
     def __init__(self):
         self.engine = create_async_engine(
-            self.__database_path,
-            echo=True
+            _get_database_url(),
+            echo=False,  # Set to True for SQL query logging
+            pool_pre_ping=True,  # Verify connections before use
         )
         self.session_factory = async_sessionmaker(
             bind=self.engine,
-            autocommit=False, autoflush=False, expire_on_commit=False
+            autocommit=False,
+            autoflush=False,
+            expire_on_commit=False,
         )
-
-    def get_scoped_session(self):
-        session = async_scoped_session(
-            session_factory=self.session_factory,
-            scopefunc=current_task,
-        )
-        return session
 
     async def session_dependency(self) -> AsyncSession:
+        """FastAPI dependency for unscoped session."""
         async with self.session_factory() as session:
             yield session
-            await session.close()
 
     async def scoped_session_dependency(self) -> AsyncSession:
-        session = self.get_scoped_session()
-        yield session
-        await session.close()
-
-
+        """FastAPI dependency for scoped session.
+        Creates a new session per request, closes it after.
+        """
+        async with self.session_factory() as session:
+            yield session

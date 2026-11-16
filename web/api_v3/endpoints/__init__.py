@@ -1,5 +1,3 @@
-__init__ = [
-    'cadastre'
-]
+__init__ = ["cadastre"]
 
 from .cadastre import cadastre

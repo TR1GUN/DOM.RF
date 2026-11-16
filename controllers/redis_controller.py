@@ -4,20 +4,21 @@ import typing
 import redis
 
 from controllers.template import BaseController
-from schemas.schemas_cadastre import RecordCadastre, QueueCadastre, RecordCadastreInRedis
+from schemas.cadastre_info import RecordCadastre, QueueCadastre, RecordCadastreInRedis
 
 
 class RedisController(BaseController):
     """
     Redis Controller
     """
+
     # _host: str
     # _port: int
     _db: int
 
     _redis_client: redis.Redis | None = None
 
-    def __init__(self, host: str = '127.0.0.1', port: int = 6379, db: int = 0):
+    def __init__(self, host: str = "127.0.0.1", port: int = 6379, db: int = 0):
         self._host = host
         self._port = port
         self._db = db
@@ -39,7 +40,7 @@ class RedisController(BaseController):
         with self._session_redis() as self._redis_client:
             self._redis_client.json().set(pk, ".", record)
 
-    def get_json_record(self, pk: str) -> dict[str:typing.Any]:
+    def get_json_record(self, pk: str) -> dict[str : typing.Any]:
         """
         Получаем JSON запись из хранилища
         :param pk:
@@ -104,7 +105,7 @@ class RedisController(BaseController):
             self._redis_client.rpush(name=topic, *value)
             return self._redis_client.llen(name=topic)
 
-    def get_elements_in_in_queue_topic(self, topic: str, start: int = 1, end: int = -1) -> list[str]:
+    def get_elements_in_in_queue_topic(self, topic: str, start: int = 0, end: int = -1) -> list[str]:
         """
         Получаем срез очереди
         :param topic:
@@ -113,7 +114,7 @@ class RedisController(BaseController):
         :return:
         """
         with self._session_redis() as self._redis_client:
-            queue = self._get_queue(topic=topic, start=start - 1, end=end)
+            queue = self._get_queue(topic=topic, start=start, end=end)
         return queue
 
     def find_index_element_in_queue_topic(self, topic: str, key: str) -> int:
@@ -127,8 +128,13 @@ class RedisController(BaseController):
             index = self._redis_client.lpos(name=topic, value=key)
         return index
 
-    def move_element(self, topic: str, new_index: int, value: str,
-                     direction: typing.Literal["BEFORE", "AFTER", "before", "after"] = 'before', ):
+    def move_element(
+        self,
+        topic: str,
+        new_index: int,
+        value: str,
+        direction: typing.Literal["BEFORE", "AFTER", "before", "after"] = "before",
+    ):
         """
         Перемещаем элемент
         :param value:
@@ -174,7 +180,7 @@ class RedisController(BaseController):
             # # Вставляем нужные значения
             # self._redis_client.lpush(name=topic, *new_queue)
 
-    def first_record_in_queue(self, topic:str) -> RecordCadastreInRedis:
+    def first_record_in_queue(self, topic: str) -> RecordCadastreInRedis:
         """
         Получаем первую очередь в очереди
         :return:
@@ -184,41 +190,39 @@ class RedisController(BaseController):
             record = self._redis_client.json().get(name=key)
         return record
 
-    def reset_index_queue(self, topic:str):
+    def reset_index_queue(self, topic: str):
         """
         Сброс значений в очереди
         :param topic:
         :return:
         """
         with self._session_redis() as self._redis_client:
-            len_set_keys = self._redis_client.smembers(name=topic)
-            self._redis_client.srem(name=topic,*len_set_keys )
+            self._redis_client.delete(topic)
 
-    def get_len_queue_topic(self, topic:str) -> int:
+    def get_len_queue_topic(self, topic: str) -> int:
         with self._session_redis() as self._redis_client:
-            return self._redis_client.smembers(name=topic)
-
+            return self._redis_client.llen(name=topic)
 
     def _get_queue(self, topic: str, start: int = 0, end: int = -1) -> list[str]:
         return self._redis_client.lrange(topic, start, end)
 
-            # queue_element = [queue_element[-1]] + element[:-1]
-            #
-            # for i, element in enumerate(queue_element, new_index):
-            #     self._redis_client.lset(topic, 1, updated_value)
+        # queue_element = [queue_element[-1]] + element[:-1]
+        #
+        # for i, element in enumerate(queue_element, new_index):
+        #     self._redis_client.lset(topic, 1, updated_value)
 
-            # Путь третий
+        # Путь третий
 
-            # self._redis_client.lpop(name=topic, count=old_index, value=name_key)
-            # Находим какой элемент нам нужен
-            # old_index = self._redis_client.lpos(name=topic,value=name_key)
-            # # Удаляем
-            # self._redis_client.srem(name=topic, count=old_index, value=name_key)
-            #
-            # # Вставляем наш элемент
-            # self._redis_client.sadd(name=topic,)1
+        # self._redis_client.lpop(name=topic, count=old_index, value=name_key)
+        # Находим какой элемент нам нужен
+        # old_index = self._redis_client.lpos(name=topic,value=name_key)
+        # # Удаляем
+        # self._redis_client.srem(name=topic, count=old_index, value=name_key)
+        #
+        # # Вставляем наш элемент
+        # self._redis_client.sadd(name=topic,)1
 
-            # self._redis_client.sadd(name=topic,where=direction, refvalue=index,value=value)
+        # self._redis_client.sadd(name=topic,where=direction, refvalue=index,value=value)
 
     # ------------------------
     # Путь первый - изменить по элементарно каждый элемент
@@ -230,7 +234,6 @@ class RedisController(BaseController):
     #     # Взять отрезок который необходимо изменить
     #
     #     # Перезапись значений в этом отрезке
-
 
     #
     # def get_len_queue_topic(self, topic: str) -> int:
@@ -288,6 +291,7 @@ class RedisController(BaseController):
     #         #     return redis_client.lrange(topic, start, end)
     #         return self._redis_client.lrange(topic, start, end)
     #
+
 
 #
 #

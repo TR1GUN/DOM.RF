@@ -1,78 +1,82 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from schemas.schemas_cadastre import RecordCadastre, RecordCadastreControl
-from database.queries.records_cadastres import add_record_cadastre_with_priority, get_record_cadastre_with_priority, set_priority_record_cadastre
+from schemas.cadastre_info import RecordCadastre, RecordCadastreControl, RecordCadastreDataBase, PositionInQueue
+from database.queries.records_cadastres import (
+    add_record_cadastre_with_priority,
+    get_record_cadastre_with_priority,
+    set_priority_record_cadastre,
+)
 from database.setup_db import DataBase
-
+from tasks.celery_tasks import billing_request
 
 cadastre = APIRouter(
-    prefix='/cadastre',
-    tags=['Cadastre'],
+    prefix="/cadastre",
+    tags=["Cadastre V2"],
     responses={404: {"description": "Not found"}},
 )
 
 
-# - Отправить запись на расчет
-# - Менять номер запроса в очереди запроса
-# - Отдать результат отчета по ID
-
-# - Отправить запись на расчет
-@cadastre.post('/records', status_code=200)
+# - Отправить запись на расчет с приоритетом
+@cadastre.post("/records", status_code=200)
 async def set_cadastre_info(
-        record_cadastre: RecordCadastre,
-        session: AsyncSession = Depends(DataBase.scoped_session_dependency)) -> int:
+    record_cadastre: RecordCadastre,
+    session: AsyncSession = Depends(DataBase.scoped_session_dependency),
+    priority: int = 1,
+) -> dict:
     """
-    Accept the cadastre record for calculation
-    :return:
+    Accept the cadastre record for calculation with priority.
+    Returns record ID, status, and priority.
     """
-    return await add_record_cadastre_with_priority(
-        session=session,
-        record_cadastre=record_cadastre,
-        priority=1
+    user_name = await add_record_cadastre_with_priority(
+        session=session, record_cadastre=record_cadastre, priority=priority
     )
+    # Enqueue the Celery task
+    billing_request.delay(record_cadastre.model_dump())
+    return {
+        "user_name": user_name,
+        "status": "created",
+        "priority": priority,
+    }
 
 
 # - Менять номер запроса в очереди запроса - Задание приоритета
-@cadastre.put('/records/{id}/queue_move', status_code=200)
-async def set_cadastre_info(
-        id: int,
-        new_priority: int,
-        session: AsyncSession = Depends(DataBase.scoped_session_dependency)) -> None:
+@cadastre.put("/records/{user_name}/queue_move", status_code=200)
+async def set_priority(
+    user_name: str,
+    new_priority: int,
+    session: AsyncSession = Depends(DataBase.scoped_session_dependency),
+) -> dict:
     """
-    Change the request number in the request queue
-    :param key:
-    :param new_position:
-    :param redis:
-    :return:
+    Change the priority of a record that has not been calculated yet.
     """
-    record = await get_record_cadastre_with_priority(
-        session=session,
-        record_cadastre_id=id)
+    record = await get_record_cadastre_with_priority(session=session, user_name=user_name)
 
-    if record.calculated:
-        raise Exception("record calculataed")
+    if record is None:
+        raise HTTPException(status_code=404, detail="Record not found")
 
-    return await set_priority_record_cadastre(
-        session=session,
-        record_cadastre_id=id,
-        new_priority=new_priority
-    )
+    if record.stage == "complete":
+        raise HTTPException(status_code=400, detail="Record already calculated")
+
+    result = await set_priority_record_cadastre(session=session, user_name=user_name, new_priority_value=new_priority)
+
+    # Re-enqueue the Celery task with new priority
+    return {
+        "user_name": user_name,
+        "old_priority": result['old_priority_id'],
+        "new_priority": result['new_priority_id'],
+    }
 
 
 # - Отдать результат отчета по ID
-@cadastre.get('/records/{id}', status_code=200)
+@cadastre.get("/records/{user_name}", status_code=200)
 async def get_record_cadastre(
-        id: str,
-        session: AsyncSession = Depends(DataBase.scoped_session_dependency)
+    user_name: str, session: AsyncSession = Depends(DataBase.scoped_session_dependency)
 ) -> RecordCadastreControl:
     """
-    Get information by ID records
-    :param redis:
-    :param id:
-    :param session:
-    :return:
+    Get information by ID records.
     """
-    return await get_record_cadastre_with_priority(
-        session=session,
-        record_cadastre_id=id)
+    record = await get_record_cadastre_with_priority(session=session, user_name=user_name)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Record not found")
+    return RecordCadastreControl(record=record, position_in_queue=None)
