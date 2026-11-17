@@ -1,5 +1,7 @@
 sqlalchemy[asyncio]
+asyncpg
 fastapi
+uvicorn[standard]
 celery[redis]
 redis[hiredis]==6.1.0
 redis-om

@@ -64,16 +64,16 @@ class ObjectsCadastres(_BaseModel):
                                                        comment='FK to ObjectCoordinates')
     cadastre_number_id: Mapped[int] = mapped_column(Integer, ForeignKey('cadastrenumbers.id'),
                                                     comment='FK to CadastreNumbers')
-    cadastre_number: Mapped["CadastreNumbers"] = relationship(foreign_keys="CadastreNumbers.id", back_populates="objects")
-    object_coordinates: Mapped["ObjectCoordinates"] = relationship(foreign_keys="ObjectCoordinates.id", back_populates="objects")
-    queue_records: Mapped[list["CadastralQueueRecords"]] = relationship(foreign_keys="CadastralQueueRecords.object_cadastres_id", back_populates="object")
+    cadastre_number: Mapped["CadastreNumbers"] = relationship(back_populates="objects")
+    object_coordinates: Mapped["ObjectCoordinates"] = relationship(back_populates="objects")
+    queue_records: Mapped[list["CadastralQueueRecords"]] = relationship(back_populates="object")
 
 
 
 class CadastralQueueRecords(_BaseModel):
     """Cadastral queue record — queue item linked to a cadastral object."""
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, comment='Unique identifier')
-    request_uuid: Mapped[uuid.UUID] = mapped_column(PgUUID(as_uuid=True), unique=True, index=True, index_type='BTree', default=uuid.uuid4, comment='Unique request identifier (auto-generated)')
+    request_uuid: Mapped[uuid.UUID] = mapped_column(PgUUID(as_uuid=True), unique=True, index=True, default=uuid.uuid4, comment='Unique request identifier (auto-generated)')
     user_name: Mapped[str] = mapped_column(String(64), unique=True, index=True, comment='User-facing request number (max 64 chars)')
     # This field can be derived from stage.status == 'complete' and doesn't need to be stored
     # calculated: Mapped[bool] = mapped_column(default=False, comment='Whether calculation is complete')
@@ -81,8 +81,8 @@ class CadastralQueueRecords(_BaseModel):
     priority_id: Mapped[int] = mapped_column(Integer, ForeignKey('prioritylevel.id'), comment='FK to PriorityLevel')
     object_cadastres_id: Mapped[int] = mapped_column(Integer, ForeignKey('objectscadastres.id'), comment='FK to ObjectsCadastres')
 
-    stage: Mapped["StageStatus"] = relationship(foreign_keys="StageStatus.id", back_populates="queue_records")
-    priority: Mapped["PriorityLevel"] = relationship(foreign_keys="PriorityLevel.id", back_populates="queue_records")
+    stage: Mapped["StageStatus"] = relationship(back_populates="queue_records")
+    priority: Mapped["PriorityLevel"] = relationship(back_populates="queue_records")
     object: Mapped["ObjectsCadastres"] = relationship(back_populates="queue_records")
 
     name_history: Mapped[list["UserNameHistory"]] = relationship(back_populates="record", cascade="all, delete-orphan")

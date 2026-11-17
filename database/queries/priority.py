@@ -9,7 +9,6 @@ async def create_priority_level(session: AsyncSession, priority: Priority) -> Pr
     """Create priority level."""
     priority_record = PriorityLevel(value=priority.value)
     session.add(priority_record)
-    session.add(priority_record)
     await session.flush()
     return priority_record
 

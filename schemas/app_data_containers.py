@@ -40,6 +40,13 @@ class QueueItem:
 
 
 @dataclass
+class PriorityQueueItem:
+    """Элемент очереди с приоритетом (API v2)."""
+    request_uuid: UUID = field(doc="UUID запроса")
+    priority: int = field(doc="Приоритет обработки")
+
+
+@dataclass
 class ModifiedPositionInQueue:
     """Схема измененной позиции в очереди."""
     new_position_in_queue: int = field(doc="Новая позиция в очереди")

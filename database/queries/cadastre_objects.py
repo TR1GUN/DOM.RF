@@ -109,7 +109,7 @@ async def _get_or_create_object_cadastre_id(
 async def _flush_and_get(session: AsyncSession, model: type, record_id: int):
     """Flush и получить запись из identity map."""
     await session.flush()
-    obj = session.get(model, record_id)
+    obj = await session.get(model, record_id)
     if obj is not None:
         return obj
 
@@ -213,7 +213,6 @@ async def get_or_create_object_coordinates(
         return await _flush_and_get(session, ObjectCoordinates, coord_id)
     except Exception:
         logger.exception("Ошибка при создании ObjectCoordinates")
-        await session.rollback()
         raise
 
 
@@ -233,7 +232,6 @@ async def get_or_create_cadastre_number(
         return await _flush_and_get(session, CadastreNumbers, cad_id)
     except Exception:
         logger.exception("Ошибка при создании CadastreNumbers")
-        await session.rollback()
         raise
 
 
@@ -246,26 +244,25 @@ async def get_or_create_cadastre_objects(
     coordinates = object_cadastre.coordinates
 
     try:
-        async with session.begin():
-            # 1. Создаём/получаем части
-            object_coordinates = await get_or_create_object_coordinates(session, coordinates)
-            cadastre_number_record = await get_or_create_cadastre_number(session, cadastre_number)
+        # Транзакцией управляет вызывающий код: так проще комбинировать
+        # создание объекта и постановку записи в очередь в одной транзакции.
+        object_coordinates = await get_or_create_object_coordinates(session, coordinates)
+        cadastre_number_record = await get_or_create_cadastre_number(session, cadastre_number)
 
-            # 2. ObjectsCadastres — атомарно через ON CONFLICT DO NOTHING RETURNING
-            obj_id = await _get_or_create_object_cadastre_id(
-                session,
-                cadastre_number_id=cadastre_number_record.id,
-                object_coordinates_id=object_coordinates.id,
-            )
+        # 2. ObjectsCadastres — атомарно через ON CONFLICT DO NOTHING RETURNING
+        obj_id = await _get_or_create_object_cadastre_id(
+            session,
+            cadastre_number_id=cadastre_number_record.id,
+            object_coordinates_id=object_coordinates.id,
+        )
 
-            return await _flush_and_get(session, ObjectsCadastres, obj_id)
+        return await _flush_and_get(session, ObjectsCadastres, obj_id)
 
     except Exception:
         logger.exception(
             f"Ошибка при создании ObjectsCadastres "
             f"({cadastre_number.cadastre_a}, {coordinates.coordinate_x})"
         )
-        await session.rollback()
         raise
 
 

@@ -1,8 +1,23 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
+
 from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
 
-class RabbitMQSettings(BaseSettings):
+class _SettingsBase(BaseSettings):
+    """Базовые настройки: читают общий .env из корня проекта."""
+
+    model_config = SettingsConfigDict(
+        env_file=_ENV_FILE,
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=False,
+    )
+
+
+class RabbitMQSettings(_SettingsBase):
     """Rabbit MQ settings."""
 
     broker_host: str = Field(description="RabbitMQ broker host")
@@ -10,16 +25,16 @@ class RabbitMQSettings(BaseSettings):
     broker_login: str = Field(description="RabbitMQ broker login")
     broker_password: str = Field(description="RabbitMQ broker password")
     broker_cadaster_queue: str = Field(description="RabbitMQ cadastre queue name")
-    broker_url: str = Field(description="RabbitMQ broker URL", alias="rabbitmq_broker_url")
+    broker_url: str = Field(description="RabbitMQ broker URL")
 
 
-class APIs(BaseSettings):
+class APIs(_SettingsBase):
     """APIs settings."""
 
     billing_cadastre_url: str = Field(description="Billing API cadastre URL")
 
 
-class DataBase(BaseSettings):
+class DataBase(_SettingsBase):
     """Database settings."""
 
     db_user: str = Field(description="Database user")
@@ -29,26 +44,24 @@ class DataBase(BaseSettings):
     db_database: str = Field(description="Database name")
 
 
-class RedisSettings(BaseSettings):
+class RedisSettings(_SettingsBase):
     """Redis settings."""
 
     redis_host: str = Field(description="Redis host")
     redis_port: int = Field(description="Redis port")
     redis_db: int = Field(description="Redis database number")
-    redis_password: str = Field(description="Redis password")
+    redis_password: str = Field(default="", description="Redis password")
 
 
-class CelerySettings(BaseSettings):
+class CelerySettings(_SettingsBase):
     """Celery settings."""
 
-    broker_url: str = Field(description="Celery broker URL", alias="celery_broker_url")
-    result_backend: str = Field(description="Celery result backend", alias="celery_result_backend")
+    broker_url: str = Field(description="Celery broker URL")
+    result_backend: str = Field(description="Celery result backend")
 
 
-class Settings(BaseSettings):
+class Settings(_SettingsBase):
     """Base Settings."""
-
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", populate_by_name=True)
 
     rabbit_mq: RabbitMQSettings = Field(default_factory=RabbitMQSettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)

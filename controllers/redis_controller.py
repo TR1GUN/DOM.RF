@@ -25,10 +25,16 @@ class RedisController(BaseController):
 
     @contextlib.contextmanager
     def _session_redis(self):
-        session = redis.Redis(host=self._host, port=self._port, db=self._db, decode_responses=True)
-        yield session
-        session.save()
-        session.close()
+        session = redis.Redis(
+            host=self._host,
+            port=self._port,
+            db=self._db,
+            decode_responses=True,
+        )
+        try:
+            yield session
+        finally:
+            session.close()
 
     def add_json_record(self, pk: str, record: dict[str, typing.Any]) -> None:
         """
@@ -58,7 +64,11 @@ class RedisController(BaseController):
         :return:
         """
         with self._session_redis() as self._redis_client:
-            record = self._redis_client.json().set(pk, ".", record.model_dump())
+            record = self._redis_client.json().set(
+                pk,
+                ".",
+                record.model_dump(mode="json"),
+            )
         return record
 
     def delete_json_record(self, pk: str):
@@ -80,7 +90,7 @@ class RedisController(BaseController):
         """
         with self._session_redis() as self._redis_client:
             # для сетов
-            self._redis_client.sadd(name=topic, *value)
+            self._redis_client.sadd(topic, value)
 
     def get_keys_topic_in_set(self, topic: str) -> int:
         """
@@ -102,8 +112,9 @@ class RedisController(BaseController):
         :return:
         """
         with self._session_redis() as self._redis_client:
-            self._redis_client.rpush(name=topic, *value)
-            return self._redis_client.llen(name=topic)
+            self._redis_client.rpush(topic, value)
+            # Индексация очереди начинается с нуля.
+            return self._redis_client.llen(name=topic) - 1
 
     def get_elements_in_in_queue_topic(self, topic: str, start: int = 0, end: int = -1) -> list[str]:
         """
@@ -117,12 +128,12 @@ class RedisController(BaseController):
             queue = self._get_queue(topic=topic, start=start, end=end)
         return queue
 
-    def find_index_element_in_queue_topic(self, topic: str, key: str) -> int:
+    def find_index_element_in_queue_topic(self, topic: str, key: str) -> int | None:
         """
-        Поиск индекса элемента
+        Поиск индекса элемента (индексация с нуля).
         :param topic:
         :param key:
-        :return:
+        :return: индекс элемента или None, если элемента нет в очереди
         """
         with self._session_redis() as self._redis_client:
             index = self._redis_client.lpos(name=topic, value=key)
@@ -134,59 +145,60 @@ class RedisController(BaseController):
         new_index: int,
         value: str,
         direction: typing.Literal["BEFORE", "AFTER", "before", "after"] = "before",
-    ):
+    ) -> int | None:
         """
-        Перемещаем элемент
-        :param value:
-        :param topic:
-        :param new_index:
-        :param direction:
-        :return:
+        Перемещаем элемент на новую позицию (индексация с нуля).
+
+        Перезаписываются только элементы между старой и новой позицией.
+        :param value: значение перемещаемого элемента
+        :param topic: имя списка в Redis
+        :param new_index: новое место в очереди
+        :param direction: оставлен для совместимости, позиция задаётся new_index
+        :return: новый индекс элемента или None, если элемента нет
         """
         with self._session_redis() as self._redis_client:
-            # Теперь - у нас несколько путей:
-            # Путь первый - Удалить элемент из очереди и вставить в нужное место
-            # Путь второй - Изменить по элементарно каждый элемент
-            # Путь третий - Взять массив, переместить элемент в нужное значение и перезаписать последовательность.
-
-            # Путь первый
-            # Находим какой элемент нам нужен
             old_index = self._redis_client.lpos(name=topic, value=value)
-            # Удаляем
-            self._redis_client.lrem(name=topic, count=old_index, value=value)
-            # Получаем значение элемента
-            element = self._redis_client.lindex(name=topic, index=new_index)
-            # Вставляем в нужный элемент
-            self._redis_client.linsert(name=topic, where=direction, refvalue=element, value=value)
+            if old_index is None:
+                return None
 
-            # # Путь второй
-            # # Берем последовательность элементов которую надо изменить
-            # # Начальный элемент
-            # old_index = self._redis_client.lpos(name=topic, value=value)
-            # queue_elements = self._get_queue(topic=topic, start=new_index - 1, end=old_index)
-            #
-            # new_queue = [queue_elements[-1]] + queue_elements[:-1]
-            # for i, element in enumerate(new_queue, new_index - 1):
-            #     self._redis_client.lset(topic, i, element)
-            #
-            # # Путь третий
-            # # берем срез очереди - От начала до нашего элемента
-            # old_index = self._redis_client.lpos(name=topic, value=value)
-            # queue_elements = self._get_queue(topic=topic, start=0, end=old_index)
-            # # формируем новую очередь
-            # new_queue = queue_elements[:new_index] + [queue_elements[-1]] + queue_elements[new_index:-1]
-            # # Обрезаем очередь
-            # self._redis_client.ltrim(name=topic, start=0, end=old_index)
-            # # Вставляем нужные значения
-            # self._redis_client.lpush(name=topic, *new_queue)
+            length = self._redis_client.llen(name=topic)
+            if length == 0:
+                return None
 
-    def first_record_in_queue(self, topic: str) -> RecordCadastreInRedis:
+            new_index = max(0, min(int(new_index), length - 1))
+            if new_index == old_index:
+                return new_index
+
+            pipe = self._redis_client.pipeline()
+
+            if new_index > old_index:
+                # Сдвигаем элементы справа от старой позиции на одну влево.
+                segment = self._redis_client.lrange(
+                    topic, old_index + 1, new_index
+                )
+                for offset, element in enumerate(segment, start=old_index):
+                    pipe.lset(topic, offset, element)
+            else:
+                # Сдвигаем элементы справа от новой позиции на одну вправо.
+                segment = self._redis_client.lrange(
+                    topic, new_index, old_index - 1
+                )
+                for offset, element in enumerate(segment, start=new_index + 1):
+                    pipe.lset(topic, offset, element)
+
+            pipe.lset(topic, new_index, value)
+            pipe.execute()
+            return new_index
+
+    def first_record_in_queue(self, topic: str) -> dict[str, typing.Any] | None:
         """
-        Получаем первую очередь в очереди
-        :return:
+        Получаем первую запись в очереди и удаляем её из списка.
+        :return: JSON-запись или None, если очередь пуста
         """
         with self._session_redis() as self._redis_client:
             key = self._redis_client.lpop(name=topic)
+            if key is None:
+                return None
             record = self._redis_client.json().get(name=key)
         return record
 

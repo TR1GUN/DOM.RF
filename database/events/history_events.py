@@ -1,11 +1,14 @@
 from datetime import datetime
 
-from sqlalchemy import event
+from sqlalchemy import event, insert, select
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
 
 import logger
-from database.models import CadastralQueueRecords, UserNameHistory, PriorityHistory
+from database.models import (
+    CadastralQueueRecords,
+    PriorityHistory,
+    UserNameHistory,
+)
 
 
 def register_event_listeners():
@@ -19,67 +22,48 @@ def register_event_listeners():
 
 def _capture_history_before_update(mapper, connection, target):
     """
-    SQLAlchemy event listener that captures changes to user_name and priority_id
-    before an update operation and creates history records automatically.
-    
-    This event is triggered by SQLAlchemy ORM before any UPDATE statement is executed
-    on the CadastralQueueRecords table.
-    
-    Args:
-        mapper: The mapper object
-        connection: The SQLAlchemy connection
-        target: The instance being updated
+    Capture changes to user_name and priority_id before an UPDATE
+    and write history rows through the same connection.
+
+    Reading through the connection (instead of the session identity map)
+    is important: the ORM object already contains the new values, while
+    the database still has the old ones.
     """
-    # Get the current session
-    session = Session.object_session(target)
-    if not session:
-        return
-    
     try:
-        # Query the current state from the database
-        current = (
-            session.query(CadastralQueueRecords)
-            .filter(CadastralQueueRecords.id == target.id)
-            .first()
-        )
-        
-        if not current:
+        current = connection.execute(
+            select(
+                CadastralQueueRecords.user_name,
+                CadastralQueueRecords.priority_id,
+            ).where(CadastralQueueRecords.id == target.id)
+        ).first()
+
+        if current is None:
             return
-        
+
+        changed_at = datetime.utcnow()
+
         # Check if user_name changed
-        if hasattr(current, 'user_name') and current.user_name != target.user_name:
-            history = UserNameHistory(
-                record_id=target.id,
-                old_user_name=current.user_name,
-                new_user_name=target.user_name,
-                changed_at=datetime.utcnow()
+        if current.user_name != target.user_name:
+            connection.execute(
+                insert(UserNameHistory).values(
+                    record_id=target.id,
+                    old_user_name=current.user_name,
+                    new_user_name=target.user_name,
+                    changed_at=changed_at,
+                )
             )
-            session.add(history)
-        
+
         # Check if priority_id changed
         if current.priority_id != target.priority_id:
-            history = PriorityHistory(
-                record_id=target.id,
-                old_priority_id=current.priority_id,
-                new_priority_id=target.priority_id,
-                changed_at=datetime.utcnow()
+            connection.execute(
+                insert(PriorityHistory).values(
+                    record_id=target.id,
+                    old_priority_id=current.priority_id,
+                    new_priority_id=target.priority_id,
+                    changed_at=changed_at,
+                )
             )
-            session.add(history)
-        
-        # Check if stage changed to 'complete' - automatically mark as calculated
-        #
-        # Consider moving this logic to runtime (Celery task) instead of ORM event
-        # This would make the code cleaner and separate concerns (business logic vs ORM hooks)
-        # Currently kept here for automatic state management during updates
-        # NOTE: 'calculated' field is commented out in model - can be derived from stage.status
 
-        # if current.stage_id != target.stage_id:
-        #     current_stage = session.query(StageStatus).filter_by(id=current.stage_id).first()
-        #     new_stage = session.query(StageStatus).filter_by(id=target.stage_id).first()
-        #     
-        #     if current_stage and new_stage and new_stage.code == 'complete' and current_stage.code != 'complete':
-        #         target.calculated = True
-    
     except SQLAlchemyError as e:
         logger.BaseLogger(name="HistoryEvent").error(
             f"Failed to create history record: {e}"

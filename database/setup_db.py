@@ -1,8 +1,15 @@
 from database.database_manager import DataBaseManager
 from database.models import StageStatus, PriorityLevel
+from database.models._base_model import _BaseModel
 from sqlalchemy import select
 
 DataBase = DataBaseManager()
+
+
+async def init_db() -> None:
+    """Создать таблицы, если они ещё не созданы."""
+    async with DataBase.engine.begin() as connection:
+        await connection.run_sync(_BaseModel.metadata.create_all)
 
 
 async def init_stages():

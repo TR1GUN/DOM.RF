@@ -2,8 +2,14 @@ import uuid
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import selectinload
 
-from database.models import CadastralQueueRecords, StageStatus
+from database.models import (
+    CadastralQueueRecords,
+    ObjectsCadastres as ObjectsCadastresModel,
+    PriorityLevel,
+    StageStatus,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.queries.cadastre_objects import get_or_create_cadastre_objects
@@ -19,6 +25,7 @@ from schemas.app_data_containers import (
     ModifiedUserData,
     ModifiedPriority,
     ModifiedStatus,
+    PriorityQueueItem,
     QueueItem,
 )
 from schemas.cadastre_info import ObjectsCadastres as ObjectsCadastresSchema, RecordCadastreDataBase
@@ -26,9 +33,25 @@ from schemas.cadastre_info import ObjectsCadastres as ObjectsCadastresSchema, Re
 logger = BaseLogger(__name__)
 
 
+def _record_with_relations_stmt():
+    """Запрос записи со всеми связями, нужными для Pydantic-схемы."""
+    return select(CadastralQueueRecords).options(
+        selectinload(CadastralQueueRecords.stage),
+        selectinload(CadastralQueueRecords.priority),
+        selectinload(CadastralQueueRecords.object).selectinload(
+            ObjectsCadastresModel.cadastre_number
+        ),
+        selectinload(CadastralQueueRecords.object).selectinload(
+            ObjectsCadastresModel.object_coordinates
+        ),
+    )
+
+
 async def get_cadastre_record_by_id(session: AsyncSession, user_name: str) -> RecordCadastreDataBase | None:
     """Get record by its user_name."""
-    stmt = select(CadastralQueueRecords).where(CadastralQueueRecords.user_name == user_name)
+    stmt = _record_with_relations_stmt().where(
+        CadastralQueueRecords.user_name == user_name
+    )
     result = await session.execute(stmt)
     record = result.scalar_one_or_none()
     if record is None:
@@ -66,6 +89,7 @@ async def add_record_cadastre(
                 priority_id=priority_record.id,
             )
             session.add(new_record)
+            await session.flush()
 
         return DataBaseRecord(
             request_uuid=new_record.request_uuid,
@@ -94,9 +118,15 @@ async def update_record_cadastre(
     Обновляет запись по user_uuid, модифицируя только те поля, которые не None.
     Возвращает ModifiedUserData с old/new значениями.
     """
-    # Получаем запись
-    stmt = select(CadastralQueueRecords).where(
-        CadastralQueueRecords.request_uuid == user_uuid
+    # Получаем запись вместе со связанными статусом и приоритетом,
+    # чтобы не провоцировать ленивую загрузку в async-контексте.
+    stmt = (
+        select(CadastralQueueRecords)
+        .options(
+            selectinload(CadastralQueueRecords.stage),
+            selectinload(CadastralQueueRecords.priority),
+        )
+        .where(CadastralQueueRecords.request_uuid == user_uuid)
     )
     try:
         result = await session.execute(stmt)
@@ -159,10 +189,11 @@ async def add_record_cadastre_with_priority(
         record_cadastre: ObjectsCadastresSchema,
         priority: Priority,
         user_name: str | None = None,
-) -> str | None:
+        status: Stage = Stage.CREATED,
+) -> DataBaseRecord | None:
     """
     Add a record with a priority level.
-    Returns the user_name on success, None on failure.
+    Returns DataBaseRecord on success, None on failure.
     """
     if user_name is None:
         user_name = str(uuid.uuid4())[:64]
@@ -175,7 +206,7 @@ async def add_record_cadastre_with_priority(
             )
             stage = await get_or_create_stage(
                 session=session,
-                stage=Stage.IN_QUEUE,
+                stage=status,
             )
             priority_record = await get_or_create_priority(
                 session=session,
@@ -189,8 +220,14 @@ async def add_record_cadastre_with_priority(
                 priority_id=priority_record.id,
             )
             session.add(new_record)
+            await session.flush()
 
-        return user_name
+        return DataBaseRecord(
+            request_uuid=new_record.request_uuid,
+            user_name=new_record.user_name,
+            status=stage.value,
+            priority_int=priority_record.value,
+        )
 
     except SQLAlchemyError as e:
         logger.exception(f"Ошибка при добавлении записи с приоритетом {user_name}")
@@ -202,12 +239,22 @@ async def get_record_cadastre_with_priority(session: AsyncSession, user_name: st
     Get a record by its user_name.
     Returns RecordCadastreDataBase schema.
     """
-    stmt = select(CadastralQueueRecords).where(CadastralQueueRecords.user_name == user_name)
+    stmt = _record_with_relations_stmt().where(
+        CadastralQueueRecords.user_name == user_name
+    )
     result = await session.execute(stmt)
     record = result.scalar_one_or_none()
     if record is None:
         return None
     return _record_to_db_schema(record)
+
+
+async def get_record_cadastre_by_uuid_with_priority(
+        session: AsyncSession,
+        request_uuid: uuid.UUID,
+) -> DataBaseRecord | None:
+    """Получить запись по request_uuid вместе со статусом и приоритетом."""
+    return await get_cadastre_record_by_uuid(session=session, user_uuid=request_uuid)
 
 
 async def set_priority_record_cadastre(
@@ -248,6 +295,52 @@ async def set_priority_record_cadastre(
         raise
 
 
+async def set_priority_record_cadastre_by_uuid(
+        session: AsyncSession,
+        request_uuid: uuid.UUID,
+        new_priority_value: int,
+) -> dict | None:
+    """
+    Изменить приоритет записи по request_uuid.
+
+    Возвращает старый/новый приоритет и текущий статус записи.
+    """
+    try:
+        priority = Priority(new_priority_value)
+        priority_record = await get_or_create_priority(
+            session=session,
+            priority=priority,
+        )
+
+        stmt = _record_with_relations_stmt().where(
+            CadastralQueueRecords.request_uuid == request_uuid
+        )
+        result = await session.execute(stmt)
+        record = result.scalar_one_or_none()
+
+        if record is None:
+            return None
+
+        old_priority = record.priority.value if record.priority else None
+        status = record.stage.value if record.stage else None
+
+        record.priority_id = priority_record.id
+        await session.commit()
+
+        return {
+            "old_priority": old_priority,
+            "new_priority": priority.value,
+            "status": status,
+        }
+
+    except (SQLAlchemyError, ValueError):
+        await session.rollback()
+        logger.exception(
+            f"Ошибка при изменении приоритета для request_uuid={request_uuid}"
+        )
+        return None
+
+
 def _record_to_db_schema(record: CadastralQueueRecords) -> RecordCadastreDataBase:
     """Convert ORM model to Pydantic schema."""
     obj = record.object
@@ -281,10 +374,12 @@ async def get_cadastre_record_by_uuid(
     stmt = select(
         CadastralQueueRecords.request_uuid,
         StageStatus.value.label("stage_value"),
-        CadastralQueueRecords.priority_id,
+        PriorityLevel.value.label("priority_value"),
         CadastralQueueRecords.user_name,
     ).join(
         StageStatus, CadastralQueueRecords.stage_id == StageStatus.id
+    ).join(
+        PriorityLevel, CadastralQueueRecords.priority_id == PriorityLevel.id
     ).where(
         CadastralQueueRecords.request_uuid == user_uuid
     )
@@ -298,7 +393,7 @@ async def get_cadastre_record_by_uuid(
         request_uuid=row.request_uuid,
         user_name=row.user_name,
         status=row.stage_value,
-        priority_int=row.priority_id,
+        priority_int=row.priority_value,
     )
 
 
@@ -385,3 +480,38 @@ async def get_queue_requests_items(session: AsyncSession) -> tuple[QueueItem, ..
         )
 
     return tuple(queue_items)
+
+
+async def get_priority_queue_records(
+        session: AsyncSession,
+) -> tuple[PriorityQueueItem, ...]:
+    """
+    Получить очередь записей с приоритетом (API v2).
+
+    Пока отдельного воркера/планировщика нет, в очередь попадают записи
+    в статусах ``created`` и ``in_queue``. Сортировка — по убыванию
+    приоритета, затем по порядку создания.
+    """
+    stmt = (
+        select(
+            CadastralQueueRecords.request_uuid,
+            PriorityLevel.value.label("priority_value"),
+        )
+        .join(StageStatus, CadastralQueueRecords.stage_id == StageStatus.id)
+        .join(PriorityLevel, CadastralQueueRecords.priority_id == PriorityLevel.id)
+        .where(
+            StageStatus.value.in_([Stage.CREATED.value, Stage.IN_QUEUE.value])
+        )
+        .order_by(
+            PriorityLevel.value.desc(),
+            CadastralQueueRecords.id.asc(),
+        )
+    )
+    result = await session.execute(stmt)
+    return tuple(
+        PriorityQueueItem(
+            request_uuid=row.request_uuid,
+            priority=row.priority_value,
+        )
+        for row in result.all()
+    )

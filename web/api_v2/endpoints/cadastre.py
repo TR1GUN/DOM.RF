@@ -1,82 +1,152 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from schemas.cadastre_info import RecordCadastre, RecordCadastreControl, RecordCadastreDataBase, PositionInQueue
 from database.queries.records_cadastres import (
     add_record_cadastre_with_priority,
-    get_record_cadastre_with_priority,
-    set_priority_record_cadastre,
+    get_cadastre_record_by_uuid,
+    get_priority_queue_records,
+    set_priority_record_cadastre_by_uuid,
 )
-from database.setup_db import DataBase
-from tasks.celery_tasks import billing_request
+from enums import Priority, Stage
+from schemas.cadastre_info import RecordStageStatus
+from web.api_v2.deps.cadastre_deps import get_db_session, get_request_uuid
+from web.api_v2.schemas.cadastre_queue import (
+    QueueInfo,
+    QueueItem,
+    RecordInfo,
+    RecordPriorityChangeRequest,
+    RecordPriorityChangedResponse,
+    RecordRequestQueueCreate,
+)
 
 cadastre = APIRouter(
-    prefix="/cadastre",
+    prefix="/records",
     tags=["Cadastre V2"],
     responses={404: {"description": "Not found"}},
 )
 
 
-# - Отправить запись на расчет с приоритетом
-@cadastre.post("/records", status_code=200)
-async def set_cadastre_info(
-    record_cadastre: RecordCadastre,
-    session: AsyncSession = Depends(DataBase.scoped_session_dependency),
-    priority: int = 1,
-) -> dict:
+def _record_status(status: str | None) -> RecordStageStatus:
+    """Привести строковый статус из БД к схеме ответа."""
+    if status is None:
+        raise HTTPException(status_code=500, detail="Record status is missing")
+    try:
+        return RecordStageStatus(status=Stage(status))
+    except ValueError:
+        raise HTTPException(status_code=500, detail="Unknown record status")
+
+
+@cadastre.post("", response_model=RecordInfo)
+async def create_record(
+    record: RecordRequestQueueCreate,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Создание запроса на расчёт с приоритетом.
+
+    1. Сохранить запись в БД со статусом ``created``.
+    2. Вернуть UUID, статус и приоритет обработки.
     """
-    Accept the cadastre record for calculation with priority.
-    Returns record ID, status, and priority.
-    """
-    user_name = await add_record_cadastre_with_priority(
-        session=session, record_cadastre=record_cadastre, priority=priority
+    db_record = await add_record_cadastre_with_priority(
+        session=session,
+        record_cadastre=record,
+        priority=record.priority,
+        status=Stage.CREATED,
     )
-    # Enqueue the Celery task
-    billing_request.delay(record_cadastre.model_dump())
-    return {
-        "user_name": user_name,
-        "status": "created",
-        "priority": priority,
-    }
+
+    if (
+        db_record is None
+        or db_record.request_uuid is None
+        or db_record.priority_int is None
+    ):
+        raise HTTPException(status_code=500, detail="Failed to create record")
+
+    return RecordInfo(
+        request_uuid=db_record.request_uuid,
+        status=_record_status(db_record.status),
+        priority=Priority(db_record.priority_int),
+    )
 
 
-# - Менять номер запроса в очереди запроса - Задание приоритета
-@cadastre.put("/records/{user_name}/queue_move", status_code=200)
-async def set_priority(
-    user_name: str,
-    new_priority: int,
-    session: AsyncSession = Depends(DataBase.scoped_session_dependency),
-) -> dict:
-    """
-    Change the priority of a record that has not been calculated yet.
-    """
-    record = await get_record_cadastre_with_priority(session=session, user_name=user_name)
+@cadastre.get("/queue", response_model=QueueInfo)
+async def get_queue(
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Получение очереди, отсортированной по приоритету обработки."""
+    queue_items = await get_priority_queue_records(session=session)
 
-    if record is None:
+    return QueueInfo(
+        queue_length=len(queue_items),
+        queue=[
+            QueueItem(
+                request_uuid=item.request_uuid,
+                priority=Priority(item.priority),
+            )
+            for item in queue_items
+        ],
+    )
+
+
+@cadastre.get("/{request_uuid}", response_model=RecordInfo)
+async def get_record(
+    request_uuid: UUID = Depends(get_request_uuid),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Получение информации о запросе по его UUID."""
+    db_record = await get_cadastre_record_by_uuid(
+        session=session,
+        user_uuid=request_uuid,
+    )
+
+    if db_record is None or db_record.priority_int is None:
         raise HTTPException(status_code=404, detail="Record not found")
 
-    if record.stage == "complete":
-        raise HTTPException(status_code=400, detail="Record already calculated")
-
-    result = await set_priority_record_cadastre(session=session, user_name=user_name, new_priority_value=new_priority)
-
-    # Re-enqueue the Celery task with new priority
-    return {
-        "user_name": user_name,
-        "old_priority": result['old_priority_id'],
-        "new_priority": result['new_priority_id'],
-    }
+    return RecordInfo(
+        request_uuid=db_record.request_uuid,
+        status=_record_status(db_record.status),
+        priority=Priority(db_record.priority_int),
+    )
 
 
-# - Отдать результат отчета по ID
-@cadastre.get("/records/{user_name}", status_code=200)
-async def get_record_cadastre(
-    user_name: str, session: AsyncSession = Depends(DataBase.scoped_session_dependency)
-) -> RecordCadastreControl:
+@cadastre.patch("/{request_uuid}", response_model=RecordPriorityChangedResponse)
+async def change_priority(
+    data: RecordPriorityChangeRequest,
+    request_uuid: UUID = Depends(get_request_uuid),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Изменение приоритета запроса.
+
+    Приоритет можно менять только у запросов в статусе ``created``.
     """
-    Get information by ID records.
-    """
-    record = await get_record_cadastre_with_priority(session=session, user_name=user_name)
-    if record is None:
+    db_record = await get_cadastre_record_by_uuid(
+        session=session,
+        user_uuid=request_uuid,
+    )
+
+    if db_record is None:
         raise HTTPException(status_code=404, detail="Record not found")
-    return RecordCadastreControl(record=record, position_in_queue=None)
+
+    if db_record.status != Stage.CREATED.value:
+        raise HTTPException(
+            status_code=400,
+            detail="Priority can only be changed for records in 'created' status",
+        )
+
+    result = await set_priority_record_cadastre_by_uuid(
+        session=session,
+        request_uuid=request_uuid,
+        new_priority_value=data.priority.value,
+    )
+
+    if result is None:
+        raise HTTPException(status_code=500, detail="Failed to change priority")
+
+    old_priority = result["old_priority"]
+
+    return RecordPriorityChangedResponse(
+        request_uuid=request_uuid,
+        old_priority=Priority(old_priority) if old_priority is not None else None,
+        new_priority=Priority(result["new_priority"]),
+        status=_record_status(result["status"]),
+    )

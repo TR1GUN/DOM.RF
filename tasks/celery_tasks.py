@@ -23,11 +23,11 @@ def billing_request(self, record: dict) -> dict:
         record_obj = RecordCadastre(**record)
         api = BillingApi(url=settings_app.api.billing_cadastre_url)
         redis_record = RecordCadastreInRedis(
+            request_uuid=uuid.uuid4(),
             cadastre_number=record_obj.cadastre_number,
             coordinates=record_obj.coordinates,
             calculated=False,
             user_name="",
-            key="",
         )
         result = api.calculate_cadastre(record=redis_record)
         return {"calculated": result.calculated}

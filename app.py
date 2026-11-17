@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from web.api_v1 import api_v1
 from web.api_v2 import api_v2
 from web.api_v3 import api_v3
-from database.setup_db import init_stages, init_priorities
+from database.setup_db import init_db, init_stages, init_priorities
 from database.events import register_event_listeners
 
 
@@ -14,6 +14,8 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     # Initialize SQLAlchemy event listeners for automatic history tracking
     register_event_listeners()
+    # Create tables on a clean database before seeding reference data
+    await init_db()
     await init_stages()
     await init_priorities()
     yield

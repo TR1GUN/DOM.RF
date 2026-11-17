@@ -1,9 +1,13 @@
-from pydantic import BaseModel, Field, computed_field
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from enums.stage import Stage
 
 class CadastreNumber(BaseModel):
     """Cadastre Number schema."""
+
+    model_config = ConfigDict(populate_by_name=True)
 
     cadastre_a: str = Field(alias="АА", min_length=2, max_length=2, description="Region code")
     cadastre_b: str = Field(alias="ВВ", min_length=2, max_length=2, description="District code")
@@ -14,6 +18,8 @@ class CadastreNumber(BaseModel):
 class CoordinateObject(BaseModel):
     """Coordinate Object."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     coordinate_x: float = Field(description="Latitude")
     coordinate_y: float = Field(description="Longitude")
 
@@ -21,6 +27,34 @@ class ObjectsCadastres(BaseModel):
     """Cadastre object schema."""
     cadastre_number: CadastreNumber = Field(description="Cadastre number")
     coordinates: CoordinateObject = Field(description="Object coordinates")
+
+
+class RecordCadastre(BaseModel):
+    """Данные кадастра, отправляемые на расчёт."""
+    cadastre_number: CadastreNumber = Field(description="Кадастровый номер")
+    coordinates: CoordinateObject = Field(description="Координаты объекта")
+
+
+class RecordCadastreInRedis(RecordCadastre):
+    """Запись кадастра, хранящаяся в Redis-очереди."""
+    request_uuid: UUID = Field(description="UUID запроса")
+    calculated: bool = Field(default=False, description="Признак завершения расчёта")
+    user_name: str | None = Field(default=None, description="Имя пользователя")
+
+
+class QueueCadastre(BaseModel):
+    """Очередь запросов в Redis."""
+    queue: list[str] = Field(default_factory=list, description="Ключи записей в порядке очереди")
+
+
+class RecordCadastreDataBase(BaseModel):
+    """Данные записи кадастра из БД."""
+    cadastre_number: CadastreNumber = Field(description="Кадастровый номер")
+    coordinates: CoordinateObject = Field(description="Координаты объекта")
+    stage: str = Field(description="Статус обработки")
+    user_name: str = Field(description="Имя пользователя")
+    priority: int | None = Field(default=None, description="Приоритет обработки")
+    key: str = Field(description="Ключ записи")
 
 
 

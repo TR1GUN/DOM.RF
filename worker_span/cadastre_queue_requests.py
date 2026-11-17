@@ -80,14 +80,15 @@ class CadastreHandlerWorker:
         processing message
         :return:
         """
+        key = str(record.request_uuid)
         result = await self._billing_request(record=record)
         if result:
-            self._broker_manager.delete_record(key=record.key)
+            self._broker_manager.delete_record(key=key)
             stage = 'complete'
-            self._logger.complete(f"Record for key {record.key} completed!")
+            self._logger.complete(f"Record for key {key} completed!")
         else:
-            self._broker_manager.add_element_in_queue(key=record.key)
-            self._logger.error(f"Record for key {record.key} error! message moved to the end of the queue")
+            self._broker_manager.add_element_in_queue(key=key)
+            self._logger.error(f"Record for key {key} error! message moved to the end of the queue")
             stage = 'in_queue'
         await update_state_cadastre(user_name=record.user_name, stage=stage)
 
